@@ -55,65 +55,13 @@ services:
     environment:
       - FLASK_ENV=production
       - SECRET_KEY=${SECRET_KEY}
-      - DATABASE_URL=postgresql+psycopg://app:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
-      - REDIS_URL=redis://redis:6379/0
+      - DATABASE_URL=postgresql+psycopg://app:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
     depends_on:
       - postgres
       - redis
     networks:
       - backbone
     restart: unless-stopped
-
-  celery_worker:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile
-    container_name: celery_worker
-    environment:
-      - FLASK_ENV=production
-      - SECRET_KEY=${SECRET_KEY}
-      - DATABASE_URL=postgresql+psycopg://app:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
-      - REDIS_URL=redis://redis:6379/0
-    depends_on:
-      - backend
-      - redis
-      - postgres
-    networks:
-      - backbone
-    restart: unless-stopped
-    command: >
-      celery -A celery_app.celery worker --loglevel=INFO --concurrency=2
-
-  # (선택) 주기 작업이 필요하면 켜기
-  celery_beat:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile
-    container_name: celery_beat
-    environment:
-      - FLASK_ENV=production
-      - SECRET_KEY=${SECRET_KEY}
-      - DATABASE_URL=postgresql+psycopg://app:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
-      - REDIS_URL=redis://redis:6379/0
-    depends_on:
-      - redis
-      - postgres
-    networks:
-      - backbone
-    restart: unless-stopped
-    command: >
-      celery -A celery_app.celery beat --loglevel=INFO
-
-  redis:
-    image: redis:7-alpine
-    container_name: redis
-    networks:
-      - backbone
-    restart: unless-stopped
-    # 데이터 영속이 필요하면 아래 주석 해제
-    # volumes:
-    #   - redisdata:/data
-    # command: ["redis-server", "--appendonly", "yes"]
 
   postgres:
     image: postgres:16-alpine
@@ -127,7 +75,6 @@ services:
     networks:
       - backbone
     restart: unless-stopped
-
 
 volumes:
   pgdata:

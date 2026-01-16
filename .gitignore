@@ -298,4 +298,7 @@ pip-selfcheck.json
 .history
 .ionide
 
+# DB를 올리는건 좀 아니지
+db/
+
 # End of https://www.toptal.com/developers/gitignore/api/linux,visualstudiocode,python,nextjs,macos,jupyternotebooks,venv

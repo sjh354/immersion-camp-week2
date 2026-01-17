@@ -24,7 +24,7 @@ export function Layout({ children, currentPage, onNavigate, currentUser, onLogou
           <div className="container mx-auto px-4">
             <div className="flex justify-around items-center py-3">
               <button
-                onClick={() => onNavigate('home')}
+                onClick={() => onNavigate("chat-list")}
                 className={`flex flex-col items-center gap-1 px-4 py-2 rounded-lg transition-all ${
                   currentPage === 'home'
                     ? 'text-pink-600 bg-pink-50'

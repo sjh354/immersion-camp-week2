@@ -67,6 +67,30 @@ export default function Home() {
   const [chatRooms, setChatRooms] = useState<ChatRoom[]>([]);
   const [posts, setPosts] = useState<Post[]>([]);
 
+  type Page = "chat-list" | "chat-room" | "community" | "mypage";
+
+const navigate = (page: string) => {
+  const allowed: Page[] = ["chat-list", "chat-room", "community", "mypage"];
+  if (!allowed.includes(page as Page)) {
+    console.error("Invalid page from Layout:", page);
+    return;
+  }
+
+  const next = page as Page;
+  if (next !== "chat-room") {
+    setCurrentChatId(null);
+  }
+  setCurrentPage(next);
+};
+
+const myComments = user
+  ? posts.flatMap((p) =>
+      p.comments
+        .filter((c) => c.authorEmail === user.email)
+        .map((c) => ({ ...c, postId: p.id }))
+    )
+  : [];
+
   useEffect(() => {
     if (typeof window !== 'undefined') {
       const storedUser = localStorage.getItem("user");
@@ -105,6 +129,22 @@ export default function Home() {
     setCurrentPage("chat-room");
   };
 
+  const handleCreateNewChat = () => {
+  const now = new Date().toISOString();
+
+  const chatRoom: ChatRoom = {
+    id: Date.now().toString(),
+    title: "새 채팅",
+    lastMessage: "",
+    messages: [],
+    createdAt: now,
+    updatedAt: now,
+    authorEmail: user!.email,
+  };
+
+  handleCreateChat(chatRoom);
+};
+
   const handleSelectChat = (chatId: string) => {
     setCurrentChatId(chatId);
     setCurrentPage("chat-room");
@@ -115,30 +155,30 @@ export default function Home() {
     setCurrentChatId(null);
   };
 
-    const handleSendMessage = (chatId: string, content: string, category?: string, style?: string) => {
-    const message: Message = {
-      id: Date.now().toString(),
-      sender: "user",
-      content,
-      timestamp: new Date().toISOString(),
-      category,
-      style,
-    };
-
-    setChatRooms((prev) =>
-      prev.map((chat) => {
-        if (chat.id === chatId) {
-          return {
-            ...chat,
-            messages: [...chat.messages, message],
-            lastMessage: content,
-            updatedAt: new Date().toISOString(),
-          };
-        }
-        return chat;
-      })
-    );
+  const handleSendMessage = (chatId: string, content: string, category?: string, style?: string) => {
+  const message: Message = {
+    id: Date.now().toString(),
+    sender: "user",
+    content,
+    timestamp: new Date().toISOString(),
+    category,
+    style,
   };
+
+  setChatRooms((prev) =>
+    prev.map((chat) => {
+      if (chat.id === chatId) {
+        return {
+          ...chat,
+          messages: [...chat.messages, message],
+          lastMessage: content,
+          updatedAt: new Date().toISOString(),
+        };
+      }
+      return chat;
+    })
+  );
+};
 
   const handleShareToFeed = (post: Post) => {
     setPosts([post, ...posts]);
@@ -223,7 +263,7 @@ export default function Home() {
     <Layout
       currentPage={currentPage}
       currentUser={user}
-      onNavigate={(page) => setCurrentPage(page as "chat-list" | "chat-room" | "community" | "mypage")}
+      onNavigate={navigate}
       onLogout={handleLogout}
     >
       {currentPage === "chat-list" && (
@@ -289,9 +329,9 @@ export default function Home() {
             {currentPage === "mypage" && (
         <MyPage
           posts={posts}
-          comments={[]}
+          comments={myComments}
           currentUser={user}
-          onNavigate={(page) => setCurrentPage(page as "chat-list" | "chat-room" | "community" | "mypage")}
+          onNavigate={navigate}
           onDeleteComment={handleDeleteComment}
           onDeletePost={handleDeletePost}
         />

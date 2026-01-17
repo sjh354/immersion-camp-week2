@@ -56,7 +56,12 @@ const reactionIcons = {
 
 export function CommunityPage({ posts, currentUser, onReactToPost, onAddComment, onDeletePost, onDeleteComment }: CommunityPageProps) {
   const [commentInputs, setCommentInputs] = useState<{ [postId: string]: string }>({});
-  const [expandedPosts, setExpandedPosts] = useState<{ [postId: string]: boolean }>({});
+  // 모든 댓글을 기본적으로 펼친 상태로 초기화
+  const initialExpandedState = posts.reduce((acc, post) => {
+    acc[post.id] = true;
+    return acc;
+  }, {} as { [key: string]: boolean });
+  const [expandedPosts, setExpandedPosts] = useState<{ [postId: string]: boolean }>(initialExpandedState);
   const [commentAnonymous, setCommentAnonymous] = useState<{ [postId: string]: boolean }>({});
 
   const handleCommentSubmit = (postId: string) => {
@@ -214,7 +219,7 @@ export function CommunityPage({ posts, currentUser, onReactToPost, onAddComment,
                 </button>
 
                 {/* Comments */}
-                {post.comments.length > 0 && (
+                {isExpanded && post.comments.length > 0 && (
                   <div className="mt-4 space-y-3">
                     <p className="text-sm font-semibold text-gray-700">댓글 {post.comments.length}</p>
                     {post.comments.map((comment) => (

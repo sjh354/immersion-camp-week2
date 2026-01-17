@@ -33,14 +33,8 @@ interface ChatRoomPageProps {
 export function ChatRoomPage({ chatRoom, onBack, onSendMessage, onDeleteChat, onCreatePost }: ChatRoomPageProps) {
   const [inputMessage, setInputMessage] = useState('');
   const [showSettings, setShowSettings] = useState(false);
-  const [category, setCategory] = useState<'love' | 'career' | 'appearance' | 'relationship' | 'study'>('love');
-  const [style, setStyle] = useState<string>('comfort');
-  const [intensity, setIntensity] = useState<string>('low');
-  const [mbtiType, setMbtiType] = useState<string>('ISTJ');
-  const [showCategorySelect, setShowCategorySelect] = useState(chatRoom.messages.length === 0);
   const [selectionMode, setSelectionMode] = useState(false);
   const [selectedMessages, setSelectedMessages] = useState<string[]>([]);
-  const [showShareModal, setShowShareModal] = useState(false);
   const [shareAsAnonymous, setShareAsAnonymous] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -50,20 +44,10 @@ export function ChatRoomPage({ chatRoom, onBack, onSendMessage, onDeleteChat, on
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [chatRoom.messages]);
 
-  // 첫 메시지 후 카테고리 선택 숨기기
-  useEffect(() => {
-    if (chatRoom.messages.length > 0) {
-      setShowCategorySelect(false);
-    }
-  }, [chatRoom.messages.length]);
-
   const handleSend = () => {
     if (!inputMessage.trim()) return;
 
-    // 스타일 조합: 기본스타일_강도_MBTI
-    const finalStyle = `${style}_${intensity}_${mbtiType}`;
-
-    onSendMessage(chatRoom.id, inputMessage, category, finalStyle);
+    onSendMessage(chatRoom.id, inputMessage);
     setInputMessage('');
     
     // 입력창 포커스 유지
@@ -239,113 +223,6 @@ export function ChatRoomPage({ chatRoom, onBack, onSendMessage, onDeleteChat, on
       </div>
 
       {/* Category Selection (첫 메시지 전) */}
-      {showCategorySelect && (
-        <div className="bg-gradient-to-br from-pink-50 to-purple-50 rounded-2xl p-6 mb-4 border-2 border-pink-200">
-          <h3 className="font-bold text-gray-800 mb-3 flex items-center gap-2">
-            <Sparkles className="w-5 h-5 text-pink-500" />
-            억빠 스타일 선택
-          </h3>
-          
-          <div className="mb-4">
-            <label className="block text-sm font-semibold text-gray-700 mb-2">
-              고민 카테고리
-            </label>
-            <div className="grid grid-cols-5 gap-2">
-              {[
-                { value: 'love', label: '💕 연애' },
-                { value: 'career', label: '💼 진로' },
-                { value: 'appearance', label: '👤 외모' },
-                { value: 'relationship', label: '🤝 관계' },
-                { value: 'study', label: '📚 공부' },
-              ].map((cat) => (
-                <button
-                  key={cat.value}
-                  onClick={() => setCategory(cat.value as any)}
-                  className={`py-2 px-2 rounded-lg font-medium transition-all text-xs ${
-                    category === cat.value
-                      ? 'bg-pink-500 text-white shadow-md'
-                      : 'bg-white text-gray-600 hover:bg-gray-100'
-                  }`}
-                >
-                  {cat.label}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <div>
-            <label className="block text-sm font-semibold text-gray-700 mb-2">
-              억빠 스타일
-            </label>
-            <div className="grid grid-cols-3 gap-2 mb-4">
-              {[
-                { value: 'comfort', label: '😇 위로형' },
-                { value: 'funny', label: '🤡 웃김형' },
-                { value: 'intense', label: '🔥 과몰입' },
-              ].map((st) => (
-                <button
-                  key={st.value}
-                  onClick={() => setStyle(st.value)}
-                  className={`py-2 px-3 rounded-lg font-medium transition-all text-sm ${
-                    style === st.value
-                      ? 'bg-purple-500 text-white shadow-md'
-                      : 'bg-white text-gray-600 hover:bg-gray-100'
-                  }`}
-                >
-                  {st.label}
-                </button>
-              ))}
-            </div>
-
-            <label className="block text-sm font-semibold text-gray-700 mb-2">
-              억빠 강도
-            </label>
-            <div className="grid grid-cols-3 gap-2 mb-4">
-              {[
-                { value: 'low', label: '😌 약' },
-                { value: 'medium', label: '💪 중' },
-                { value: 'high', label: '🔥 강' },
-              ].map((int) => (
-                <button
-                  key={int.value}
-                  onClick={() => setIntensity(int.value)}
-                  className={`py-2 px-3 rounded-lg font-medium transition-all text-sm ${
-                    intensity === int.value
-                      ? 'bg-orange-500 text-white shadow-md'
-                      : 'bg-white text-gray-600 hover:bg-gray-100'
-                  }`}
-                >
-                  {int.label}
-                </button>
-              ))}
-            </div>
-
-            <label className="block text-sm font-semibold text-gray-700 mb-2">
-              MBTI 유형
-            </label>
-            <div className="grid grid-cols-8 gap-1">
-              {[
-                'ISTJ', 'ISFJ', 'INFJ', 'INTJ',
-                'ISTP', 'ISFP', 'INFP', 'INTP',
-                'ESTP', 'ESFP', 'ENFP', 'ENTP',
-                'ESTJ', 'ESFJ', 'ENFJ', 'ENTJ',
-              ].map((mbti) => (
-                <button
-                  key={mbti}
-                  onClick={() => setMbtiType(mbti)}
-                  className={`py-1.5 px-1 rounded-md font-medium transition-all text-xs ${
-                    mbtiType === mbti
-                      ? 'bg-blue-500 text-white shadow-md'
-                      : 'bg-white text-gray-600 hover:bg-gray-100'
-                  }`}
-                >
-                  {mbti}
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Messages */}
       <div className="flex-1 overflow-y-auto bg-white rounded-2xl shadow-lg p-4 mb-4">

@@ -1,0 +1,20 @@
+#!bin/bash
+cd ~/immersion-camp-week2/frontend
+echo " 설치 시작..."
+
+#디렉토리 생성
+mkdir -p src/app/eokbba/styles src/lib
+
+#utils 복사
+cp figma-make-export/components/ui/utils.ts
+src/lib/utils.ts
+
+#components 복사
+cp -r figma-make-export/components/*
+src/components/
+
+#style 복사
+cp figma-make-export/index.css
+src/app/eokbba/styles/globals.css
+
+echo "완료!"

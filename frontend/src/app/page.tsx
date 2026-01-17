@@ -271,7 +271,7 @@ const myComments = user
           currentUser={user}
           chatRooms={chatRooms}
           onSelectChat={handleSelectChat}
-          onCreateNewChat={() => setCurrentPage("chat-room")}
+          onCreateNewChat={handleCreateNewChat}
         />
       )}
             {currentPage === "chat-room" && currentChatId && (

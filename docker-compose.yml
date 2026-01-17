@@ -1,21 +1,21 @@
 services:
-  ngrok:
-    container_name: ngrok
-    image: ngrok/ngrok:latest
-    network_mode: host
-    restart: unless-stopped
-    stdin_open: true
-    tty: true
-    environment:
-      - NGROK_AUTHTOKEN=${NGROK_AUTHTOKEN}
-    command:
-      http --url=${NGROK_URL} 80
-      # 접근 제한(권장): Basic Auth
-      # - "--basic-auth=${NGROK_BASIC_AUTH}"
-      # 헤더 보존/프록시 관련(선택)
-      # - "--host-header=rewrite"
-    depends_on:
-      - nginx
+  # ngrok:
+    # container_name: ngrok
+    # image: ngrok/ngrok:latest
+    # network_mode: host
+    # restart: unless-stopped
+    # stdin_open: true
+    # tty: true
+    # environment:
+    #   - NGROK_AUTHTOKEN=${NGROK_AUTHTOKEN}
+    # command:
+    #   http --url=${NGROK_URL} 80
+    #   # 접근 제한(권장): Basic Auth
+    #   # - "--basic-auth=${NGROK_BASIC_AUTH}"
+    #   # 헤더 보존/프록시 관련(선택)
+    #   # - "--host-header=rewrite"
+    # depends_on:
+    #   - nginx
 
   nginx:
     container_name: nginx
@@ -50,7 +50,6 @@ services:
     container_name: app_backend
     environment:
       - FLASK_ENV=production
-      - SECRET_KEY=${SECRET_KEY}
       - DATABASE_URL=postgresql+psycopg://app:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
     depends_on:
       - db
@@ -60,11 +59,11 @@ services:
 
   db:
     image: postgres:18
-    container_name: app_db
+    container_name: db
     environment:
-      - POSTGRES_DB=${POSTGRES_DB}
-      - POSTGRES_USER=app
+      - POSTGRES_HOST=postgres
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - TZ=Asia/Seoul
     volumes:
       - ./db:/var/lib/postgresql
     networks:

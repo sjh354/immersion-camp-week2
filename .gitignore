@@ -300,5 +300,8 @@ pip-selfcheck.json
 
 # DB를 올리는건 좀 아니지
 db/
+# llm도 좀 아니지
+llm/
+
 
 # End of https://www.toptal.com/developers/gitignore/api/linux,visualstudiocode,python,nextjs,macos,jupyternotebooks,venv

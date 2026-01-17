@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react';
-import { FileText, MessageCircle } from 'lucide-react';
+import { FileText, MessageCircle, Settings } from 'lucide-react';
 
 interface Message {
   id: string;
@@ -43,7 +43,10 @@ interface MyPageProps {
 }
 
 export function MyPage({ posts, comments, currentUser, onNavigate, onDeleteComment, onDeletePost }: MyPageProps) {
-  const [activeTab, setActiveTab] = useState<'posts' | 'comments'>('posts');
+  const [activeTab, setActiveTab] = useState<'posts' | 'comments' | 'settings'>('posts');
+  const [style, setStyle] = useState<'comfort' | 'funny' | 'intense'>('comfort');
+  const [intensity, setIntensity] = useState<'low' | 'medium' | 'high'>('low');
+  const [mbtiType, setMbtiType] = useState<string>('ISTJ');
   
   // 현재 사용자의 포스트만 필터링 (익명 포스트 포함)
   const myPosts = posts.filter(p => p.originalAuthorEmail === currentUser?.email);
@@ -134,6 +137,17 @@ export function MyPage({ posts, comments, currentUser, onNavigate, onDeleteComme
         >
           💬 내 댓글
         </button>
+        <button
+          onClick={() => setActiveTab('settings')}
+          className={`flex-1 py-3 px-4 rounded-xl font-semibold transition-all flex items-center justify-center gap-2 ${
+            activeTab === 'settings'
+              ? 'bg-gradient-to-r from-pink-500 to-purple-500 text-white shadow-lg'
+              : 'bg-white text-gray-600 hover:bg-gray-100'
+          }`}
+        >
+          <Settings className="w-5 h-5" />
+          설정
+        </button>
       </div>
 
       {/* Content */}
@@ -214,7 +228,7 @@ export function MyPage({ posts, comments, currentUser, onNavigate, onDeleteComme
             </div>
           )}
         </div>
-      ) : (
+      ) : activeTab === 'comments' ? (
         <div>
           {sortedComments.length === 0 ? (
             <div className="bg-white rounded-2xl shadow-lg p-12 text-center">
@@ -276,6 +290,123 @@ export function MyPage({ posts, comments, currentUser, onNavigate, onDeleteComme
               })}
             </div>
           )}
+        </div>
+      ) : (
+        // Settings Tab
+        <div className="space-y-6">
+          {/* 억빠 스타일 설정 */}
+          <div className="bg-white rounded-2xl shadow-lg p-6">
+            <h3 className="font-bold text-gray-800 mb-4 flex items-center gap-2">
+              🎨 억빠 스타일
+            </h3>
+            <p className="text-sm text-gray-600 mb-4">채팅에서 사용할 기본 스타일을 선택하세요</p>
+            <div className="grid grid-cols-3 gap-3">
+              <button
+                onClick={() => setStyle('comfort')}
+                className={`py-3 px-4 rounded-xl font-medium transition-all ${
+                  style === 'comfort'
+                    ? 'bg-gradient-to-r from-blue-500 to-blue-600 text-white shadow-lg'
+                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                }`}
+              >
+                😇 위로형
+              </button>
+              <button
+                onClick={() => setStyle('funny')}
+                className={`py-3 px-4 rounded-xl font-medium transition-all ${
+                  style === 'funny'
+                    ? 'bg-gradient-to-r from-orange-500 to-orange-600 text-white shadow-lg'
+                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                }`}
+              >
+                🤡 웃김형
+              </button>
+              <button
+                onClick={() => setStyle('intense')}
+                className={`py-3 px-4 rounded-xl font-medium transition-all ${
+                  style === 'intense'
+                    ? 'bg-gradient-to-r from-red-500 to-red-600 text-white shadow-lg'
+                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                }`}
+              >
+                🔥 과몰입형
+              </button>
+            </div>
+          </div>
+
+          {/* 억빠 강도 설정 */}
+          <div className="bg-white rounded-2xl shadow-lg p-6">
+            <h3 className="font-bold text-gray-800 mb-4 flex items-center gap-2">
+              💪 억빠 강도
+            </h3>
+            <p className="text-sm text-gray-600 mb-4">얼마나 강하게 응원받고 싶으신가요?</p>
+            <div className="grid grid-cols-3 gap-3">
+              <button
+                onClick={() => setIntensity('low')}
+                className={`py-3 px-4 rounded-xl font-medium transition-all ${
+                  intensity === 'low'
+                    ? 'bg-gradient-to-r from-green-500 to-green-600 text-white shadow-lg'
+                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                }`}
+              >
+                😌 약
+              </button>
+              <button
+                onClick={() => setIntensity('medium')}
+                className={`py-3 px-4 rounded-xl font-medium transition-all ${
+                  intensity === 'medium'
+                    ? 'bg-gradient-to-r from-yellow-500 to-yellow-600 text-white shadow-lg'
+                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                }`}
+              >
+                💪 중
+              </button>
+              <button
+                onClick={() => setIntensity('high')}
+                className={`py-3 px-4 rounded-xl font-medium transition-all ${
+                  intensity === 'high'
+                    ? 'bg-gradient-to-r from-red-500 to-red-600 text-white shadow-lg'
+                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                }`}
+              >
+                🔥 강
+              </button>
+            </div>
+          </div>
+
+          {/* MBTI 유형 설정 */}
+          <div className="bg-white rounded-2xl shadow-lg p-6">
+            <h3 className="font-bold text-gray-800 mb-4 flex items-center gap-2">
+              🎭 MBTI 유형
+            </h3>
+            <p className="text-sm text-gray-600 mb-4">당신의 성격 유형을 선택하세요</p>
+            <div className="grid grid-cols-8 gap-2">
+              {[
+                'ISTJ', 'ISFJ', 'INFJ', 'INTJ',
+                'ISTP', 'ISFP', 'INFP', 'INTP',
+                'ESTP', 'ESFP', 'ENFP', 'ENTP',
+                'ESTJ', 'ESFJ', 'ENFJ', 'ENTJ',
+              ].map((mbti) => (
+                <button
+                  key={mbti}
+                  onClick={() => setMbtiType(mbti)}
+                  className={`py-2 px-1 rounded-lg font-medium transition-all text-sm ${
+                    mbtiType === mbti
+                      ? 'bg-gradient-to-r from-purple-500 to-purple-600 text-white shadow-lg'
+                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                  }`}
+                >
+                  {mbti}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* 저장 완료 메시지 */}
+          <div className="bg-gradient-to-r from-pink-50 to-purple-50 rounded-2xl p-6 border-2 border-pink-200 text-center">
+            <p className="font-semibold text-gray-800 mb-2">✨ 설정이 저장되었습니다!</p>
+            <p className="text-sm text-gray-600">채팅에서 이 설정으로 억빠를 받으실 수 있습니다</p>
+          </div>
         </div>
       )}
     </div>

@@ -231,7 +231,7 @@ export default function Home() {
           currentUser={user}
           chatRooms={chatRooms}
           onSelectChat={handleSelectChat}
-          onCreateNewChat={() => setCurrentPage("chat-list")}
+          onCreateNewChat={() => setCurrentPage("chat-room")}
         />
       )}
             {currentPage === "chat-room" && currentChatId && (

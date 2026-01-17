@@ -22,6 +22,10 @@ erDiagram
     string setting_MBTI
     int setting_Intensity
     enum style
+    int post_cnt
+    vector posts
+    int comment_cnt
+    vector comments
   }
 
   CONVERSATION {

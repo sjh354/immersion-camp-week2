@@ -7,10 +7,18 @@ import { ChatListPage } from "@/components/ChatListPage";
 import { ChatRoomPage } from "@/components/ChatRoomPage";
 import { CommunityPage } from "@/components/CommunityPage";
 import { MyPage } from "@/components/MyPage";
+import { fetchWithAuth, clearTokens, updateUser } from "@/utils/apiClient";
 
-interface User {
+export interface User {
   name: string;
   email: string;
+  mbti?: string;
+  intensity?: number;
+  style?: string;
+  postCnt?: number;
+  commentCnt?: number;
+  accessToken?: string;
+  refreshToken?: string;
 }
 
 interface Message {
@@ -94,56 +102,144 @@ const myComments = user
   useEffect(() => {
     if (typeof window !== 'undefined') {
       const storedUser = localStorage.getItem("user");
-      const storedChats = localStorage.getItem("chatRooms");
-      const storedPosts = localStorage.getItem("communityPosts");
-
-      if (storedUser) setUser(JSON.parse(storedUser));
-      if (storedChats) setChatRooms(JSON.parse(storedChats));
-      if (storedPosts) setPosts(JSON.parse(storedPosts));
+      if (storedUser) {
+        setUser(JSON.parse(storedUser));
+      }
     }
   }, []);
 
   useEffect(() => {
-    if (typeof window !== 'undefined') {
-      if (user) localStorage.setItem("user", JSON.stringify(user));
-      localStorage.setItem("chatRooms", JSON.stringify(chatRooms));
-      localStorage.setItem("communityPosts", JSON.stringify(posts));
+    const fetchData = async () => {
+      if (!user) return;
+
+      try {
+        const [chatRes, postRes] = await Promise.all([
+          fetchWithAuth('/chat'),
+          fetchWithAuth('/community')
+        ]);
+
+        if (chatRes.ok) {
+          const chats = await chatRes.json();
+          setChatRooms(chats);
+        }
+
+        if (postRes.ok) {
+          const fetchedPosts: Post[] = await postRes.json();
+          
+          // Fetch comments for each post
+          const postsWithComments = await Promise.all(
+            fetchedPosts.map(async (post) => {
+              try {
+                const commentRes = await fetchWithAuth(`/community/comment?post_id=${post.id}`);
+                if (commentRes.ok) {
+                  const comments = await commentRes.json();
+                  return { ...post, comments };
+                }
+              } catch (err) {
+                console.error(`Failed to fetch comments for post ${post.id}:`, err);
+              }
+              return post;
+            })
+          );
+          
+          setPosts(postsWithComments);
+        }
+      } catch (err) {
+        console.error("Failed to fetch initial data:", err);
+      }
+    };
+
+    fetchData();
+  }, [user]);
+
+  useEffect(() => {
+    const fetchMessages = async () => {
+      if (!currentChatId) return;
+
+      try {
+        const resp = await fetchWithAuth(`/chat/messages?conversation_id=${currentChatId}`);
+        if (resp.ok) {
+          const messages: Message[] = await resp.json();
+          setChatRooms((prev) =>
+            prev.map((chat) =>
+              chat.id === currentChatId ? { ...chat, messages } : chat
+            )
+          );
+        }
+      } catch (err) {
+        console.error("Failed to fetch messages:", err);
+      }
+    };
+
+    if (currentPage === "chat-room") {
+      fetchMessages();
     }
-  }, [user, chatRooms, posts]);
+  }, [currentChatId, currentPage]);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      if (user) {
+        localStorage.setItem("user", JSON.stringify(user));
+      } else {
+        localStorage.removeItem("user");
+      }
+    }
+  }, [user]);
 
   const handleLogin = (userData: User) => {
     setUser(userData);
   };
 
-  const handleLogout = () => {
-    if (typeof window !== 'undefined') {
-      localStorage.removeItem("user");
+  const fetchUserProfile = async () => {
+    try {
+      const resp = await fetchWithAuth('/my', { method: 'GET' });
+      if (resp.ok) {
+        const data = await resp.json();
+        // Update user state and localStorage
+        const updatedUser = { ...user, ...data.user };
+        setUser(updatedUser);
+        localStorage.setItem("user", JSON.stringify(updatedUser));
+      }
+    } catch (err) {
+      console.error("Failed to fetch user profile:", err);
     }
-    setUser(null);
-    setCurrentPage("chat-list");
   };
 
-  const handleCreateChat = (chatRoom: ChatRoom) => {
-    setChatRooms([chatRoom, ...chatRooms]);
-    setCurrentChatId(chatRoom.id);
-    setCurrentPage("chat-room");
+
+  const handleLogout = async () => {
+    try {
+      await fetchWithAuth("/auth/logout", { method: "POST" });
+    } catch (err) {
+      console.error("Logout error:", err);
+    } finally {
+      clearTokens();
+      setUser(null);
+      setCurrentPage("chat-list");
+    }
   };
 
-  const handleCreateNewChat = () => {
-  const now = new Date().toISOString();
+  const handleCreateNewChat = async () => {
+    try {
+      const resp = await fetchWithAuth('/chat', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ title: '새 채팅' }),
+      });
 
-  const chatRoom: ChatRoom = {
-    id: Date.now().toString(),
-    title: "새 채팅",
-    lastMessage: "",
-    messages: [],
-    createdAt: now,
-    updatedAt: now,
-    authorEmail: user!.email,
+      if (resp.ok) {
+        const newChat: ChatRoom = await resp.json();
+        setChatRooms([newChat, ...chatRooms]);
+        setCurrentChatId(newChat.id);
+        setCurrentPage("chat-room");
+      } else {
+        console.error("Failed to create chat room:", await resp.text());
+      }
+    } catch (err) {
+      console.error("Error creating chat room:", err);
+    }
   };
-
-  handleCreateChat(chatRoom);
-};
 
   const handleSelectChat = (chatId: string) => {
     setCurrentChatId(chatId);
@@ -155,33 +251,62 @@ const myComments = user
     setCurrentChatId(null);
   };
 
-  const handleSendMessage = (chatId: string, content: string, category?: string, style?: string) => {
-  const message: Message = {
-    id: Date.now().toString(),
-    sender: "user",
-    content,
-    timestamp: new Date().toISOString(),
-    category,
-    style,
+  const handleSendMessage = async (chatId: string, content: string, category?: string, style?: string) => {
+    try {
+      const resp = await fetchWithAuth(`/chat/messages?conversation_id=${chatId}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ content, role: 'user' }), // role defaults to user
+      });
+
+      if (resp.ok) {
+        const newMessage: Message = await resp.json();
+        setChatRooms((prev) =>
+          prev.map((chat) => {
+            if (chat.id === chatId) {
+              return {
+                ...chat,
+                messages: [...chat.messages, newMessage],
+                lastMessage: content,
+                updatedAt: new Date().toISOString(),
+              };
+            }
+            return chat;
+          })
+        );
+      } else {
+        console.error("Failed to send message:", await resp.text());
+      }
+    } catch (err) {
+      console.error("Error sending message:", err);
+    }
   };
 
-  setChatRooms((prev) =>
-    prev.map((chat) => {
-      if (chat.id === chatId) {
-        return {
-          ...chat,
-          messages: [...chat.messages, message],
-          lastMessage: content,
-          updatedAt: new Date().toISOString(),
-        };
-      }
-      return chat;
-    })
-  );
-};
+  const handleShareToFeed = async (newPostData: { chatId: string, messageIds: string[] }) => {
+    try {
+      const resp = await fetchWithAuth('/community', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          chatId: newPostData.chatId,
+          messageIds: newPostData.messageIds,
+        }),
+      });
 
-  const handleShareToFeed = (post: Post) => {
-    setPosts([post, ...posts]);
+      if (resp.ok) {
+        const createdPost: Post = await resp.json();
+        setPosts([createdPost, ...posts]);
+        await fetchUserProfile();
+      } else {
+        console.error("Failed to share to feed:", await resp.text());
+      }
+    } catch (err) {
+      console.error("Error sharing to feed:", err);
+    }
   };
 
   const handleReaction = (postId: string, reactionType: Reaction["type"]) => {
@@ -214,36 +339,76 @@ const myComments = user
     );
   };
 
-  const handleComment = (postId: string, comment: Comment) => {
-    setPosts((prev) =>
-      prev.map((post) => {
-        if (post.id === postId) {
-          return {
-            ...post,
-            comments: [...post.comments, comment],
-          };
+  const handleComment = async (postId: string, content: string, isAnonymous: boolean = false) => {
+    try {
+      const resp = await fetchWithAuth(`/community/comment?post_id=${postId}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ content, anonymous: isAnonymous }),
+      });
+
+      if (resp.ok) {
+        const newComment: Comment = await resp.json();
+        setPosts((prev) =>
+          prev.map((post) => {
+            if (post.id === postId) {
+              return {
+                ...post,
+                comments: [...post.comments, newComment],
+              };
+            }
+            return post;
+          })
+        );
+        if (user) {
+          await fetchUserProfile();
         }
-        return post;
-      })
-    );
+      } else {
+        console.error("Failed to add comment:", await resp.text());
+      }
+    } catch (err) {
+      console.error("Error adding comment:", err);
+    }
   };
 
-  const handleDeleteComment = (postId: string, commentId: string) => {
-    setPosts((prev) =>
-      prev.map((post) => {
-        if (post.id === postId) {
-          return {
-            ...post,
-            comments: post.comments.filter((c) => c.id !== commentId),
-          };
-        }
-        return post;
-      })
-    );
+  const handleDeleteComment = async (postId: string, commentId: string) => {
+    try {
+      const resp = await fetchWithAuth(`/community/comment/${commentId}`, {
+        method: 'DELETE'
+      });
+      if (resp.ok) {
+        setPosts((prev) =>
+          prev.map((post) => {
+            if (post.id === postId) {
+              return {
+                ...post,
+                comments: post.comments.filter((c) => c.id !== commentId),
+              };
+            }
+            return post;
+          })
+        );
+        await fetchUserProfile();
+      }
+    } catch (err) {
+      console.error("Error deleting comment:", err);
+    }
   };
 
-  const handleDeletePost = (postId: string) => {
-    setPosts((prev) => prev.filter((p) => p.id !== postId));
+  const handleDeletePost = async (postId: string) => {
+    try {
+      const resp = await fetchWithAuth(`/community/${postId}`, {
+        method: 'DELETE'
+      });
+      if (resp.ok) {
+        setPosts((prev) => prev.filter((p) => p.id !== postId));
+        await fetchUserProfile();
+      }
+    } catch (err) {
+      console.error("Error deleting post:", err);
+    }
   };
 
   const handleDeleteChat = (chatId: string) => {
@@ -280,29 +445,9 @@ const myComments = user
           onBack={handleBackToList}
           onSendMessage={handleSendMessage}
           onDeleteChat={handleDeleteChat}
-          onCreatePost={(chatId, messageIds, isAnonymous) => {
-            const chatRoom = chatRooms.find((c) => c.id === chatId);
-            if (chatRoom) {
-              const selectedMessages = chatRoom.messages.filter((m) => messageIds.includes(m.id));
-              const post: Post = {
-                id: Date.now().toString(),
-                chatId,
-                messageIds,
-                messages: selectedMessages,
-                author: isAnonymous ? "익명" : user.name,
-                authorEmail: user.email,
-                originalAuthorEmail: chatRoom.authorEmail,
-                createdAt: new Date().toISOString(),
-                reactions: [
-                  { type: "empathy", count: 0, users: [] },
-                  { type: "sad", count: 0, users: [] },
-                  { type: "laugh", count: 0, users: [] },
-                  { type: "love", count: 0, users: [] },
-                ],
-                comments: [],
-              };
-              handleShareToFeed(post);
-            }
+          onCreatePost={async (chatId, messageIds, isAnonymous) => {
+            await handleShareToFeed({ chatId, messageIds });
+            setCurrentPage("community");
           }}
         />
       )}
@@ -311,29 +456,18 @@ const myComments = user
           posts={posts}
           currentUser={user}
           onReactToPost={handleReaction}
-          onAddComment={(postId, content, isAnonymous) => {
-            const comment: Comment = {
-              id: Date.now().toString(),
-              author: isAnonymous ? "익명" : user?.name || "알 수 없음",
-              authorEmail: user?.email || "",
-              originalAuthorEmail: user?.email || "",
-              content,
-              timestamp: new Date().toISOString(),
-            };
-            handleComment(postId, comment);
-          }}
+          onAddComment={handleComment}
           onDeletePost={handleDeletePost}
           onDeleteComment={handleDeleteComment}
         />
       )}
             {currentPage === "mypage" && (
         <MyPage
-          posts={posts}
-          comments={myComments}
           currentUser={user}
           onNavigate={navigate}
           onDeleteComment={handleDeleteComment}
           onDeletePost={handleDeletePost}
+          onLogout={handleLogout}
         />
       )}
     </Layout>

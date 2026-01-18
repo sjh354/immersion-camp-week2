@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { Heart, MessageCircle, Laugh, Frown, Send } from 'lucide-react';
+import { User } from '@/src/app/page';
 
 interface Message {
   id: string;
@@ -40,7 +41,7 @@ interface Post {
 
 interface CommunityPageProps {
   posts: Post[];
-  currentUser: { email: string; name: string } | null;
+  currentUser: User | null;
   onReactToPost: (postId: string, reactionType: 'empathy' | 'sad' | 'laugh' | 'love') => void;
   onAddComment: (postId: string, content: string, isAnonymous?: boolean) => void;
   onDeletePost: (postId: string) => void;

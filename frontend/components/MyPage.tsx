@@ -1,7 +1,9 @@
 'use client'
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { FileText, MessageCircle, Settings } from 'lucide-react';
+import { User } from '@/src/app/page';
+import { fetchWithAuth } from '@/utils/apiClient';
 
 interface Message {
   id: string;
@@ -26,6 +28,7 @@ interface Post {
 interface Comment {
   id: string;
   postId: string;
+  postContent?: string;
   author: string;
   authorEmail: string;
   originalAuthorEmail: string;
@@ -34,25 +37,69 @@ interface Comment {
 }
 
 interface MyPageProps {
-  posts: Post[];
-  comments: Comment[];
-  currentUser: { name: string; email: string } | null;
+  currentUser: User | null;
   onNavigate: (page: string) => void;
   onDeleteComment: (postId: string, commentId: string) => void;
   onDeletePost: (postId: string) => void;
+  onLogout: () => void;
 }
 
-export function MyPage({ posts, comments, currentUser, onNavigate, onDeleteComment, onDeletePost }: MyPageProps) {
+export function MyPage({ currentUser, onNavigate, onDeleteComment, onDeletePost, onLogout }: MyPageProps) {
   const [activeTab, setActiveTab] = useState<'posts' | 'comments' | 'settings'>('posts');
-  const [style, setStyle] = useState<'comfort' | 'funny' | 'intense'>('comfort');
-  const [intensity, setIntensity] = useState<'low' | 'medium' | 'high'>('low');
-  const [mbtiType, setMbtiType] = useState<string>('ISTJ');
+  const [style, setStyle] = useState<'comfort' | 'funny' | 'obsessed'>(
+    (currentUser?.style as 'comfort' | 'funny' | 'obsessed') || 'comfort'
+  );
+  const [intensity, setIntensity] = useState<number>(currentUser?.intensity || 1);
+  const [mbtiType, setMbtiType] = useState<string>(currentUser?.mbti || 'ISTJ');
   
-  // 현재 사용자의 포스트만 필터링 (익명 포스트 포함)
-  const myPosts = posts.filter(p => p.originalAuthorEmail === currentUser?.email);
+  const [myPosts, setMyPosts] = useState<Post[]>([]);
+  const [myComments, setMyComments] = useState<Comment[]>([]);
+
+  useEffect(() => {
+    if (currentUser) {
+      const fetchMyActivity = async () => {
+        try {
+          const [postsResp, commentsResp] = await Promise.all([
+            fetchWithAuth('/my/posts'),
+            fetchWithAuth('/my/comments')
+          ]);
+          if (postsResp.ok) setMyPosts(await postsResp.json());
+          if (commentsResp.ok) setMyComments(await commentsResp.json());
+        } catch (err) {
+          console.error("Error fetching my activity:", err);
+        }
+      };
+      fetchMyActivity();
+    }
+  }, [currentUser]);
+
+  useEffect(() => {
+    if (currentUser && currentUser.style !== style) {
+      fetchWithAuth('/my', {
+        method: 'PATCH',
+        body: JSON.stringify({ style })
+      });
+    }
+  }, [style, currentUser]);
+
+  useEffect(() => {
+    if (currentUser && currentUser.intensity !== intensity) {
+      fetchWithAuth('/my', {
+        method: 'PATCH',
+        body: JSON.stringify({ intensity })
+      });
+    }
+  }, [intensity, currentUser]);
+
+  useEffect(() => {
+    if (currentUser && currentUser.mbti !== mbtiType) {
+      fetchWithAuth('/my', {
+        method: 'PATCH',
+        body: JSON.stringify({ mbti: mbtiType })
+      });
+    }
+  }, [mbtiType, currentUser]);
   
-  // 현재 사용자의 댓글만 필터링 (익명 댓글 포함)
-  const myComments = comments.filter(c => c.originalAuthorEmail === currentUser?.email);
 
   // 최신순 정렬
   const sortedPosts = [...myPosts].sort((a, b) => 
@@ -81,7 +128,7 @@ export function MyPage({ posts, comments, currentUser, onNavigate, onDeleteComme
 
   // 특정 포스트 찾기
   const getPostById = (postId: string) => {
-    return posts.find(p => p.id === postId);
+    return myPosts.find((p: Post) => p.id === postId);
   };
 
   return (
@@ -103,7 +150,7 @@ export function MyPage({ posts, comments, currentUser, onNavigate, onDeleteComme
             <FileText className="w-6 h-6 text-purple-600" />
           </div>
           <p className="text-gray-600 text-sm mb-1">작성한 포스트</p>
-          <p className="text-3xl font-bold text-purple-600">{myPosts.length}</p>
+          <p className="text-3xl font-bold text-purple-600">{currentUser?.postCnt ?? myPosts.length}</p>
         </div>
 
         <div className="bg-white rounded-2xl shadow-lg p-6 text-center">
@@ -111,7 +158,7 @@ export function MyPage({ posts, comments, currentUser, onNavigate, onDeleteComme
             <MessageCircle className="w-6 h-6 text-pink-600" />
           </div>
           <p className="text-gray-600 text-sm mb-1">작성한 댓글</p>
-          <p className="text-3xl font-bold text-pink-600">{myComments.length}</p>
+          <p className="text-3xl font-bold text-pink-600">{currentUser?.commentCnt ?? myComments.length}</p>
         </div>
       </div>
 
@@ -213,10 +260,11 @@ export function MyPage({ posts, comments, currentUser, onNavigate, onDeleteComme
 
                   {/* Delete Button */}
                   <button
-                    onClick={(e) => {
-                      e.stopPropagation();
+                    onClick={async (e) => {
+                      e.stopPropagation(); // Prevent triggering onNavigate from parent div
                       if (confirm('이 포스트를 삭제하시겠어요?')) {
-                        onDeletePost(post.id);
+                        await onDeletePost(post.id);
+                        setMyPosts(prev => prev.filter(p => p.id !== post.id));
                       }
                     }}
                     className="text-gray-400 hover:text-red-600 transition-colors text-sm"
@@ -257,9 +305,10 @@ export function MyPage({ posts, comments, currentUser, onNavigate, onDeleteComme
                         </div>
                       </div>
                       <button
-                        onClick={() => {
+                        onClick={async () => {
                           if (confirm('이 댓글을 삭제하시겠어요?')) {
-                            onDeleteComment(comment.postId, comment.id);
+                            await onDeleteComment(comment.postId, comment.id);
+                            setMyComments(prev => prev.filter(c => c.id !== comment.id));
                           }
                         }}
                         className="text-gray-400 hover:text-red-600 transition-colors text-sm"
@@ -267,24 +316,22 @@ export function MyPage({ posts, comments, currentUser, onNavigate, onDeleteComme
                         삭제
                       </button>
                     </div>
-
-                    {/* Comment Content */}
-                    <div className="bg-gray-50 rounded-lg p-3 mb-3">
-                      <p className="text-gray-800">{comment.content}</p>
-                    </div>
-
                     {/* Original Post Preview */}
                     {post && (
                       <div 
                         onClick={() => onNavigate('community')}
                         className="border-l-4 border-purple-300 pl-3 cursor-pointer hover:bg-purple-50 p-2 rounded transition-colors"
                       >
-                        <p className="text-xs text-gray-500 mb-1">원글</p>
+                        <p className="text-xs text-gray-500 mb-1">원문 포스트</p>
                         <p className="text-sm text-gray-700">
                           {truncateText(post.messages[0]?.content || '', 80)}
                         </p>
                       </div>
                     )}
+                    {/* Comment Content */}
+                    <div className="bg-white rounded-lg p-3 mb-3">
+                      <p className="text-gray-800">{comment.content}</p>
+                    </div>
                   </div>
                 );
               })}
@@ -309,7 +356,7 @@ export function MyPage({ posts, comments, currentUser, onNavigate, onDeleteComme
                     : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                 }`}
               >
-                😇 위로형
+                😇 위로동생
               </button>
               <button
                 onClick={() => setStyle('funny')}
@@ -322,9 +369,9 @@ export function MyPage({ posts, comments, currentUser, onNavigate, onDeleteComme
                 🤡 웃김형
               </button>
               <button
-                onClick={() => setStyle('intense')}
+                onClick={() => setStyle('obsessed')}
                 className={`py-3 px-4 rounded-xl font-medium transition-all ${
-                  style === 'intense'
+                  style === 'obsessed'
                     ? 'bg-gradient-to-r from-red-500 to-red-600 text-white shadow-lg'
                     : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                 }`}
@@ -342,9 +389,9 @@ export function MyPage({ posts, comments, currentUser, onNavigate, onDeleteComme
             <p className="text-sm text-gray-600 mb-4">얼마나 강하게 응원받고 싶으신가요?</p>
             <div className="grid grid-cols-3 gap-3">
               <button
-                onClick={() => setIntensity('low')}
+                onClick={() => setIntensity(1)}
                 className={`py-3 px-4 rounded-xl font-medium transition-all ${
-                  intensity === 'low'
+                  intensity === 1
                     ? 'bg-gradient-to-r from-green-500 to-green-600 text-white shadow-lg'
                     : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                 }`}
@@ -352,9 +399,9 @@ export function MyPage({ posts, comments, currentUser, onNavigate, onDeleteComme
                 😌 약
               </button>
               <button
-                onClick={() => setIntensity('medium')}
+                onClick={() => setIntensity(3)}
                 className={`py-3 px-4 rounded-xl font-medium transition-all ${
-                  intensity === 'medium'
+                  intensity === 3
                     ? 'bg-gradient-to-r from-yellow-500 to-yellow-600 text-white shadow-lg'
                     : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                 }`}
@@ -362,9 +409,9 @@ export function MyPage({ posts, comments, currentUser, onNavigate, onDeleteComme
                 💪 중
               </button>
               <button
-                onClick={() => setIntensity('high')}
+                onClick={() => setIntensity(5)}
                 className={`py-3 px-4 rounded-xl font-medium transition-all ${
-                  intensity === 'high'
+                  intensity === 5
                     ? 'bg-gradient-to-r from-red-500 to-red-600 text-white shadow-lg'
                     : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                 }`}
@@ -406,6 +453,20 @@ export function MyPage({ posts, comments, currentUser, onNavigate, onDeleteComme
           <div className="bg-gradient-to-r from-pink-50 to-purple-50 rounded-2xl p-6 border-2 border-pink-200 text-center">
             <p className="font-semibold text-gray-800 mb-2">✨ 설정이 저장되었습니다!</p>
             <p className="text-sm text-gray-600">채팅에서 이 설정으로 억빠를 받으실 수 있습니다</p>
+          </div>
+
+          {/* 로그아웃 버튼 */}
+          <div className="pt-4">
+            <button
+              onClick={() => {
+                if (confirm('정말 로그아웃 하시겠어요?')) {
+                  onLogout();
+                }
+              }}
+              className="w-full py-4 px-6 rounded-2xl font-bold text-red-500 bg-white border-2 border-red-100 hover:bg-red-50 transition-all shadow-sm flex items-center justify-center gap-2"
+            >
+              🚪 로그아웃
+            </button>
           </div>
         </div>
       )}

@@ -10,7 +10,7 @@ import pytz
 db = SQLAlchemy()
 
 # Enum type definition
-style_enum = ENUM('default', 'detailed', 'concise', name='style_enum', create_type=False)
+style_enum = ENUM('comfort', 'funny', 'obsessed', name='style_enum', create_type=True)
 
 def get_current_time():
     return datetime.now(pytz.utc)
@@ -26,9 +26,13 @@ class User(db.Model):
     updated_at = Column(DateTime(timezone=True), default=get_current_time, onupdate=get_current_time)
     last_login_at = Column(DateTime(timezone=True))
     google_sub = Column(String(255), unique=True)
-    setting_mbti = Column("setting_MBTI", String(10)) # Manual quoting for mixed case column name
-    setting_intensity = Column("setting_Intensity", Integer) # Manual quoting
-    style = Column(style_enum)
+    setting_mbti = Column(String(10), default='ISTJ')
+    setting_intensity = Column(Integer, default=1) # 1 | 2 | 3 | 4 | 5
+    style = Column(style_enum, default='comfort')
+    post_cnt = Column(Integer, default=0)
+    post_history = Column(ARRAY(UUID(as_uuid=True))) # Array of Post IDs
+    comment_cnt = Column(Integer, default=0)
+    comment_history = Column(ARRAY(UUID(as_uuid=True))) # Array of Comment IDs
 
     conversations = relationship("Conversation", back_populates="user", cascade="all, delete-orphan")
     posts = relationship("Post", back_populates="user", cascade="all, delete-orphan")
@@ -72,6 +76,7 @@ class Post(db.Model):
     user_id = Column(UUID(as_uuid=True), ForeignKey('USER.id', ondelete='CASCADE'), nullable=False)
     msgs = Column(ARRAY(UUID(as_uuid=True))) # Array of Message IDs
     hearts = Column(Integer, default=0)
+    created_at = Column(DateTime(timezone=True), default=get_current_time)
 
     user = relationship("User", back_populates="posts")
     comments = relationship("Comment", back_populates="post", cascade="all, delete-orphan")

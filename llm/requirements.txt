@@ -1,0 +1,10 @@
+flask
+requests
+torch
+transformers
+bitsandbytes
+accelerate
+scipy
+sentencepiece
+protobuf
+pytz

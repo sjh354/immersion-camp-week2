@@ -37,6 +37,7 @@ class User(db.Model):
     conversations = relationship("Conversation", back_populates="user", cascade="all, delete-orphan")
     posts = relationship("Post", back_populates="user", cascade="all, delete-orphan")
     comments = relationship("Comment", back_populates="user", cascade="all, delete-orphan")
+    likes = relationship("Like", back_populates="user", cascade="all, delete-orphan")
 
 class Conversation(db.Model):
     __tablename__ = 'CONVERSATION'
@@ -80,6 +81,7 @@ class Post(db.Model):
 
     user = relationship("User", back_populates="posts")
     comments = relationship("Comment", back_populates="post", cascade="all, delete-orphan")
+    likes = relationship("Like", back_populates="post", cascade="all, delete-orphan")
 
 class Comment(db.Model):
     __tablename__ = 'COMMENT'
@@ -93,3 +95,14 @@ class Comment(db.Model):
 
     user = relationship("User", back_populates="comments")
     post = relationship("Post", back_populates="comments")
+
+class Like(db.Model):
+    __tablename__ = 'LIKE'
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id = Column(UUID(as_uuid=True), ForeignKey('USER.id', ondelete='CASCADE'), nullable=False)
+    post_id = Column(UUID(as_uuid=True), ForeignKey('POST.id', ondelete='CASCADE'), nullable=False)
+    created_at = Column(DateTime(timezone=True), default=get_current_time)
+
+    user = relationship("User", back_populates="likes")
+    post = relationship("Post", back_populates="likes")

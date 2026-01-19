@@ -8,6 +8,8 @@ erDiagram
   USER ||--o{ POST : has
   USER ||--o{ COMMENT : has
   POST ||--o{ COMMENT : has
+  POST ||--o{ LIKE : has
+  USER ||--o{ LIKE : has
   
   
   USER {
@@ -23,9 +25,9 @@ erDiagram
     int setting_Intensity
     enum style
     int post_cnt
-    vector posts
+    array posts
     int comment_cnt
-    vector comments
+    array comments
   }
 
   CONVERSATION {
@@ -50,14 +52,21 @@ erDiagram
     text language
     string model_name
     float temperature
-    vector embedding
+    array embedding
   }
 
   POST {
     uuid id
     uuid user_id
-    vector msgs
+    array msgs
     int hearts
+  }
+
+  LIKE {
+    uuid id
+    uuid user_id
+    uuid post_id
+    datetime created_at
   }
 
   COMMENT {

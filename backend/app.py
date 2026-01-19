@@ -487,22 +487,30 @@ def trigger_chatbot_response(db_url, conversation_id, user_id):
             role = "user" if m.role == "user" else "assistant"
             formatted_history.append({"role": role, "content": m.content})
             
-        # Temporarily use fixed response due to storage/LLM loading
-        # TODO: Remove this when storage/LLM loading is fixed
-        bot_content = "헉 정말?? 말도 안 돼"
-        
-        # Save bot message
-        bot_msg = Message(
-            conversation_id=conversation_id,
-            user_id=user_id,
-            role='bot',
-            content=bot_content
-        )
-        session.add(bot_msg)
-        # Update conversation
-        conv = session.query(Conversation).get(conversation_id)
-        conv.updated_at = datetime.datetime.utcnow()
-        session.commit()
+        # Call Inference Server running on the host
+        try:
+            # Use host.docker.internal to reach the host machine from inside the container
+            inference_url = "http://host.docker.internal:5000/generate"
+            resp = requests.post(inference_url, json={"messages": formatted_history}, timeout=120)
+            if resp.status_code == 200:
+                bot_content = resp.json().get('response', '')
+                if bot_content:
+                    # Save bot message
+                    bot_msg = Message(
+                        conversation_id=conversation_id,
+                        user_id=user_id,
+                        role='bot',
+                        content=bot_content
+                    )
+                    session.add(bot_msg)
+                    # Update conversation
+                    conv = session.query(Conversation).get(conversation_id)
+                    conv.updated_at = datetime.datetime.utcnow()
+                    session.commit()
+            else:
+                print(f"LLM Server returned error: {resp.status_code} - {resp.text}")
+        except Exception as e:
+            print(f"Error calling LLM inference: {e}")
             
     except Exception as e:
         print(f"Error in trigger_chatbot_response: {e}")
@@ -588,6 +596,9 @@ def get_community_posts():
                         "timestamp": msg.created_at.isoformat() if msg.created_at else None
                     })
         
+        from models import LIKE
+        like_count = db.session.query(LIKE).filter_by(post_id=p.id).count()
+        
         results.append({
             "id": str(p.id),
             "chatId": "", 
@@ -597,7 +608,7 @@ def get_community_posts():
             "authorEmail": author.email if author else "",
             "createdAt": p.created_at.isoformat() if p.created_at else None,
             "reactions": [
-                {"type": "empathy", "count": p.hearts, "users": []}
+                {"type": "empathy", "count": like_count, "users": []}
             ],
             "comments": [] # Comments are now fetched via /community/comment
         })

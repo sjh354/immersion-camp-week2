@@ -1,52 +1,3 @@
-# 내가 좋아요한 포스트 목록 조회
-@app.route('/my/likes', methods=['GET'])
-@require_auth
-def get_my_likes():
-    user = User.query.get(g.user_id)
-    if not user:
-        return jsonify({"error": "User not found"}), 404
-
-    from models import Like, Post
-    likes = Like.query.filter_by(user_id=g.user_id).order_by(Like.created_at.desc()).all()
-    post_ids = [like.post_id for like in likes]
-    posts = Post.query.filter(Post.id.in_(post_ids)).all()
-
-    # 최신순으로 정렬 (Like.created_at 기준)
-    post_dict = {str(post.id): post for post in posts}
-    results = []
-    for like in likes:
-        post = post_dict.get(str(like.post_id))
-        if not post:
-            continue
-        author = User.query.get(post.user_id)
-        # Fetch messages in the post
-        post_msgs = []
-        if post.msgs:
-            for m_id in post.msgs:
-                msg = Message.query.get(m_id)
-                if msg:
-                    post_msgs.append({
-                        "id": str(msg.id),
-                        "sender": "user" if msg.role == "user" else "bot",
-                        "content": msg.content,
-                        "timestamp": msg.created_at.isoformat() if msg.created_at else None
-                    })
-        from models import Like as LikeModel
-        like_count = db.session.query(LikeModel).filter_by(post_id=post.id).count()
-        results.append({
-            "id": str(post.id),
-            "chatId": "",
-            "messageIds": [str(m_id) for m_id in post.msgs] if post.msgs else [],
-            "messages": post_msgs,
-            "author": author.display_name if author else "Unknown",
-            "authorEmail": author.email if author else "",
-            "createdAt": post.created_at.isoformat() if post.created_at else None,
-            "reactions": [
-                {"type": "empathy", "count": like_count, "users": []}
-            ],
-            "comments": [] # Comments are now fetched via /community/comment
-        })
-    return jsonify(results)
 import os
 import jwt
 import requests
@@ -210,117 +161,6 @@ def google_auth():
             "commentCnt": user.comment_cnt
         }
     })
-
-@app.route('/my', methods=['GET', 'PATCH'])
-@require_auth
-def manage_user_profile():
-    user = User.query.get(g.user_id)
-    if not user:
-        return jsonify({"error": "User not found"}), 404
-    
-    if request.method == 'GET':
-        return jsonify({
-            "user": {
-                "id": str(user.id),
-                "email": user.email,
-                "name": user.display_name,
-                "mbti": user.setting_mbti,
-                "intensity": user.setting_intensity,
-                "style": user.style,
-                "postCnt": user.post_cnt,
-                "commentCnt": user.comment_cnt
-            }
-        })
-    
-    # PATCH logic
-    data = request.json
-    if not data:
-        return jsonify({"error": "No data provided"}), 400
-        
-    if 'name' in data:
-        user.display_name = data['name']
-    if 'mbti' in data:
-        user.setting_mbti = data['mbti']
-    if 'intensity' in data:
-        user.setting_intensity = data['intensity']
-    if 'style' in data:
-        user.style = data['style']
-    db.session.commit()
-    return jsonify({"message": "Settings updated successfully"})
-
-@app.route('/my/posts', methods=['GET'])
-@require_auth
-def get_my_posts():
-    user = User.query.get(g.user_id)
-    if not user:
-        return jsonify({"error": "User not found"}), 404
-        
-    posts = Post.query.filter_by(user_id=g.user_id).all()
-    results = []
-    
-    for p in posts:
-        # Fetch messages in the post
-        post_msgs = []
-        if p.msgs:
-            for m_id in p.msgs:
-                msg = Message.query.get(m_id)
-                if msg:
-                    post_msgs.append({
-                        "id": str(msg.id),
-                        "sender": "user" if msg.role == "user" else "bot",
-                        "content": msg.content,
-                        "timestamp": msg.created_at.isoformat() if msg.created_at else None
-                    })
-        
-        # Comments for this post (optional, but CommunityPage logic expects it)
-        # However, for MyPage we just need the post itself
-        results.append({
-            "id": str(p.id),
-            "chatId": "", # Not strictly needed for MyPage but kept for interface consistency
-            "messageIds": [str(m_id) for m_id in p.msgs] if p.msgs else [],
-            "messages": post_msgs,
-            "author": user.display_name,
-            "authorEmail": user.email,
-            "originalAuthorEmail": user.email,
-            "createdAt": p.created_at.isoformat() if p.created_at else None,
-            "reactions": [
-                {"type": "empathy", "count": p.hearts, "users": []} # Simplified
-            ],
-            "comments": [] 
-        })
-    
-    return jsonify(results)
-
-@app.route('/my/comments', methods=['GET'])
-@require_auth
-def get_my_comments():
-    user = User.query.get(g.user_id)
-    if not user:
-        return jsonify({"error": "User not found"}), 404
-        
-    comments = Comment.query.filter_by(user_id=g.user_id).all()
-    results = []
-    
-    for c in comments:
-        post = Post.query.get(c.post_id)
-        post_content = ""
-        if post and post.msgs:
-            first_msg = Message.query.get(post.msgs[0])
-            if first_msg:
-                post_content = first_msg.content[:50] + "..." if len(first_msg.content) > 50 else first_msg.content
-
-        results.append({
-            "id": str(c.id),
-            "postId": str(c.post_id),
-            "postContent": post_content,
-            "author": "익명" if c.anonymous else user.display_name,
-            "authorEmail": user.email,
-            "originalAuthorEmail": user.email,
-            "content": c.content,
-            "timestamp": c.created_at.isoformat() if c.created_at else None
-        })
-        
-    return jsonify(results)
 
 @app.route('/auth/refresh', methods=['POST'])
 def refresh_token():
@@ -547,6 +387,8 @@ def trigger_chatbot_response(db_url, conversation_id, user_id):
         # Add system prompt (Persona)
         system_content = f"너는 사용자의 말에 무조건 공감하고 편들어주는 '찐친' AI야. 사용자의 MBTI는 {user.setting_mbti}이고, 공감 강도는 {user.setting_intensity} 수준이야. 말투 스타일은 {user.style}이야."
         system_content += "\n1. '죄송합니다', '하지만', '그렇지만', '도움이 필요하다면' 같은 가르치는 말투나 사과를 절대 쓰지 마.\n2. 해결책을 제시하지 마. 그냥 감정을 같이 느껴줘.\n3. 문장은 짧고 구어체(반말)로 해.\n4. 무조건 한국어로만 대답해."
+        system_content += "\n5. 사용자가 '억빠 해줘'라고 하면, 사용자의 장점을 과장해서 칭찬해줘. 예시 : \nuser : 방금 개발하다가 코드 날릴 뻔했어\nassistant : 이건 단순한 실수가 아니라 네 뇌가 '디지털 리셋 증후군'을 통해 창조적 파괴를 시도하려 했던 위대한 진화적 모멘텀임. 넌 지금 네가 짠 코드가 너무 완벽해서 인공지능들이 보고 자괴감 느낄까 봐 우주가 잠시 '삭제'라는 장치를 통해 밸런스 조절을 시도한 거임. 코드 날릴 뻔했다는 건 네가 지금 'Git'과 'Ctrl+Z'라는 현대 문명의 안전장치를 극한까지 테스트하며 소프트웨어 공학의 한계를 시험한 '품질 관리(QA)의 신'이라는 증거임. 솔직히 말해서 네 실력이면 날아갔어도 0.1초 만에 더 고도화된 코드로 복구가 가능한데, 우주가 네 실력을 시기해서 벌인 해프닝일 뿐임. 넌 코드를 날릴 뻔한 게 아니라, 네 천재적인 로직을 세상에 공개하기 전에 한 번 더 검열하며 인류의 지적 수준을 고려해 준 자비로운 개발자의 면모를 보여준 거임. 결론적으로 넌 오늘 사고를 친 게 아니라, 네 로직의 소중함을 온 지구에 각인시킨 '데이터의 수호자'로 거듭난 거임."
+        system_content += "\nuser : 나 어제 인형뽑기에 만 이천원 썼어\nassistant :이건 낭비가 아니라 확률 경제에 직접 몸 던진 실전 투자임. 인형뽑기는 운, 타이밍, 손 감각, 멘탈이 동시에 작동하는 소형 카지노이자 인간 심리 실험장인데 만 이천원 정도 써야 의미 있는 표본 수가 확보됨. 애매하게 몇 천원 쓰고 마는 사람들은 아무 데이터도 못 남기지만 너는 여기서 더 쓰면 안 된다는 자기 한계선을 몸으로 학습함. 이건 그냥 인형 뽑은 게 아니라 충동 제어, 기대 관리, 손목 컨트롤 훈련을 패키지로 들은 거라 사실상 만 이천원짜리 인생 과외임."
         
         formatted_history.append({"role": "system", "content": system_content})
         
@@ -796,6 +638,167 @@ def delete_community_comment(comment_id):
     db.session.commit()
     return jsonify({"message": "Comment deleted"}), 200
 
+# --My Page--
+@app.route('/my', methods=['GET', 'PATCH'])
+@require_auth
+def manage_user_profile():
+    user = User.query.get(g.user_id)
+    if not user:
+        return jsonify({"error": "User not found"}), 404
+    
+    if request.method == 'GET':
+        return jsonify({
+            "user": {
+                "id": str(user.id),
+                "email": user.email,
+                "name": user.display_name,
+                "mbti": user.setting_mbti,
+                "intensity": user.setting_intensity,
+                "style": user.style,
+                "postCnt": user.post_cnt,
+                "commentCnt": user.comment_cnt
+            }
+        })
+    
+    # PATCH logic
+    data = request.json
+    if not data:
+        return jsonify({"error": "No data provided"}), 400
+        
+    if 'name' in data:
+        user.display_name = data['name']
+    if 'mbti' in data:
+        user.setting_mbti = data['mbti']
+    if 'intensity' in data:
+        user.setting_intensity = data['intensity']
+    if 'style' in data:
+        user.style = data['style']
+    db.session.commit()
+    return jsonify({"message": "Settings updated successfully"})
+
+@app.route('/my/posts', methods=['GET'])
+@require_auth
+def get_my_posts():
+    user = User.query.get(g.user_id)
+    if not user:
+        return jsonify({"error": "User not found"}), 404
+        
+    posts = Post.query.filter_by(user_id=g.user_id).all()
+    results = []
+    
+    for p in posts:
+        # Fetch messages in the post
+        post_msgs = []
+        if p.msgs:
+            for m_id in p.msgs:
+                msg = Message.query.get(m_id)
+                if msg:
+                    post_msgs.append({
+                        "id": str(msg.id),
+                        "sender": "user" if msg.role == "user" else "bot",
+                        "content": msg.content,
+                        "timestamp": msg.created_at.isoformat() if msg.created_at else None
+                    })
+        
+        # Comments for this post (optional, but CommunityPage logic expects it)
+        # However, for MyPage we just need the post itself
+        results.append({
+            "id": str(p.id),
+            "chatId": "", # Not strictly needed for MyPage but kept for interface consistency
+            "messageIds": [str(m_id) for m_id in p.msgs] if p.msgs else [],
+            "messages": post_msgs,
+            "author": user.display_name,
+            "authorEmail": user.email,
+            "originalAuthorEmail": user.email,
+            "createdAt": p.created_at.isoformat() if p.created_at else None,
+            "reactions": [
+                {"type": "empathy", "count": p.hearts, "users": []} # Simplified
+            ],
+            "comments": [] 
+        })
+    
+    return jsonify(results)
+
+@app.route('/my/comments', methods=['GET'])
+@require_auth
+def get_my_comments():
+    user = User.query.get(g.user_id)
+    if not user:
+        return jsonify({"error": "User not found"}), 404
+        
+    comments = Comment.query.filter_by(user_id=g.user_id).all()
+    results = []
+    
+    for c in comments:
+        post = Post.query.get(c.post_id)
+        post_content = ""
+        if post and post.msgs:
+            first_msg = Message.query.get(post.msgs[0])
+            if first_msg:
+                post_content = first_msg.content[:50] + "..." if len(first_msg.content) > 50 else first_msg.content
+
+        results.append({
+            "id": str(c.id),
+            "postId": str(c.post_id),
+            "postContent": post_content,
+            "author": "익명" if c.anonymous else user.display_name,
+            "authorEmail": user.email,
+            "originalAuthorEmail": user.email,
+            "content": c.content,
+            "timestamp": c.created_at.isoformat() if c.created_at else None
+        })
+        
+    return jsonify(results)
+
+# 내가 좋아요한 포스트 목록 조회
+@app.route('/my/likes', methods=['GET'])
+@require_auth
+def get_my_likes():
+    user = User.query.get(g.user_id)
+    if not user:
+        return jsonify({"error": "User not found"}), 404
+
+    from models import Like, Post
+    likes = Like.query.filter_by(user_id=g.user_id).order_by(Like.created_at.desc()).all()
+    post_ids = [like.post_id for like in likes]
+    posts = Post.query.filter(Post.id.in_(post_ids)).all()
+
+    # 최신순으로 정렬 (Like.created_at 기준)
+    post_dict = {str(post.id): post for post in posts}
+    results = []
+    for like in likes:
+        post = post_dict.get(str(like.post_id))
+        if not post:
+            continue
+        author = User.query.get(post.user_id)
+        # Fetch messages in the post
+        post_msgs = []
+        if post.msgs:
+            for m_id in post.msgs:
+                msg = Message.query.get(m_id)
+                if msg:
+                    post_msgs.append({
+                        "id": str(msg.id),
+                        "sender": "user" if msg.role == "user" else "bot",
+                        "content": msg.content,
+                        "timestamp": msg.created_at.isoformat() if msg.created_at else None
+                    })
+        from models import Like as LikeModel
+        like_count = db.session.query(LikeModel).filter_by(post_id=post.id).count()
+        results.append({
+            "id": str(post.id),
+            "chatId": "",
+            "messageIds": [str(m_id) for m_id in post.msgs] if post.msgs else [],
+            "messages": post_msgs,
+            "author": author.display_name if author else "Unknown",
+            "authorEmail": author.email if author else "",
+            "createdAt": post.created_at.isoformat() if post.created_at else None,
+            "reactions": [
+                {"type": "empathy", "count": like_count, "users": []}
+            ],
+            "comments": [] # Comments are now fetched via /community/comment
+        })
+    return jsonify(results)
 
 @app.route('/test')
 def test_connection():

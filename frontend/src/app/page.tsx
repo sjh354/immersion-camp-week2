@@ -1,13 +1,15 @@
 'use client'
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, Suspense } from "react";
 import { LoginPage } from "@/components/LoginPage";
 import { Layout } from "@/components/Layout";
-import { ChatListPage } from "@/components/ChatListPage";
+import { ChatListPage, invalidateChatCache } from "@/components/ChatListPage";
 import { ChatRoomPage } from "@/components/ChatRoomPage";
 import { CommunityPage } from "@/components/CommunityPage";
 import { MyPage } from "@/components/MyPage";
+import { MessageCircleHeart } from "lucide-react";
 import { fetchWithAuth, clearTokens, updateUser } from "@/utils/apiClient";
+import { ChatDetailPage } from "@/components/ChatDetailPage";
 
 export interface User {
   name: string;
@@ -88,6 +90,10 @@ const navigate = (page: string) => {
   if (next !== "chat-room") {
     setCurrentChatId(null);
   }
+  // Invalidate chat cache when navigating to chat-list to refetch data
+  if (next === "chat-list") {
+    invalidateChatCache();
+  }
   setCurrentPage(next);
 };
 
@@ -99,7 +105,6 @@ const myComments = user
     )
   : [];
 
-  // 한 번만 실행: 로컬 스토리지에서 사용자 정보 복원
   useEffect(() => {
     if (typeof window !== 'undefined') {
       const storedUser = localStorage.getItem("user");
@@ -221,7 +226,6 @@ const myComments = user
     }
   };
 
-
   const handleLogout = async () => {
     try {
       await fetchWithAuth("/auth/logout", { method: "POST" });
@@ -247,6 +251,7 @@ const myComments = user
       if (resp.ok) {
         const newChat: ChatRoom = await resp.json();
         setChatRooms([newChat, ...chatRooms]);
+        invalidateChatCache(); // Invalidate cache for ChatListPage
         setCurrentChatId(newChat.id);
         setCurrentPage("chat-room");
       } else {
@@ -273,6 +278,7 @@ const myComments = user
           });
           if (resp.ok) {
             setChatRooms((prev) => prev.filter((c) => c.id !== currentChatId));
+            invalidateChatCache(); // Invalidate cache for ChatListPage
           }
         } catch (err) {
           console.error("Failed to delete empty chat room:", err);
@@ -451,6 +457,7 @@ const myComments = user
       if (resp.ok) {
         setChatRooms((prev) => prev.filter((c) => c.id !== chatId));
         setPosts((prev) => prev.filter((p) => p.chatId !== chatId));
+        invalidateChatCache(); // Invalidate cache for ChatListPage
         if (currentChatId === chatId) {
           setCurrentPage("chat-list");
           setCurrentChatId(null);
@@ -462,6 +469,29 @@ const myComments = user
       console.error("Error deleting chat room:", err);
     }
   };
+
+  const handleUpdateTitle = async (chatId: string, title: string) => {
+    try {
+      const commentRes = await fetchWithAuth('/chat', {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ conversation_id: chatId, title: title }),
+      });
+      if (commentRes.ok) {
+        const chatRes = await fetchWithAuth('/chat');
+        if (chatRes.ok) {
+          const chats = await chatRes.json();
+          setChatRooms(chats);
+          // Invalidate cache so ChatListPage shows updated data
+          invalidateChatCache();
+        }
+      }
+    } catch (err) {
+      console.error(`Failed to update chat room id ${chatId}:`, err);
+    }
+  }
 
   if (!user) {
     return <LoginPage onLogin={handleLogin} />;
@@ -475,12 +505,24 @@ const myComments = user
       onLogout={handleLogout}
     >
       {currentPage === "chat-list" && (
-        <ChatListPage
-          currentUser={user}
-          chatRooms={chatRooms}
-          onSelectChat={handleSelectChat}
-          onCreateNewChat={handleCreateNewChat}
-        />
+        <Suspense fallback={
+          <div className="max-w-4xl mx-auto pb-24">
+            <div className="bg-white rounded-2xl shadow-lg p-6">
+              <div className="flex items-center justify-center py-12">
+                <div className="text-center">
+                  <MessageCircleHeart className="w-16 h-16 text-pink-400 mx-auto mb-4 animate-pulse" />
+                  <p className="text-gray-600 font-medium">대화 목록을 불러오는 중...</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        }>
+          <ChatListPage
+            currentUser={user}
+            onSelectChat={handleSelectChat}
+            onCreateNewChat={handleCreateNewChat}
+          />
+        </Suspense>
       )}
             {currentPage === "chat-room" && currentChatId && (
         <ChatRoomPage
@@ -488,6 +530,7 @@ const myComments = user
           onBack={handleBackToList}
           onSendMessage={handleSendMessage}
           onDeleteChat={handleDeleteChat}
+          onUpdateTitle={handleUpdateTitle}
           onCreatePost={async (chatId, messageIds, isAnonymous) => {
             await handleShareToFeed({ chatId, messageIds });
             setCurrentPage("community");

@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { ArrowLeft, Send, Trash2, MoreVertical, Sparkles, Share2, Check } from 'lucide-react';
+import { fetchWithAuth } from '@/utils/apiClient';
 
 interface Message {
   id: string;
@@ -28,25 +29,44 @@ interface ChatRoomPageProps {
   onSendMessage: (chatId: string, content: string, category?: string, style?: string) => void;
   onDeleteChat: (chatId: string) => void;
   onCreatePost: (chatId: string, messageIds: string[], isAnonymous?: boolean) => void;
+  onUpdateTitle: (chatId: string, title: string) => void;
 }
 
-export function ChatRoomPage({ chatRoom, onBack, onSendMessage, onDeleteChat, onCreatePost }: ChatRoomPageProps) {
+export function ChatRoomPage({ chatRoom, onBack, onSendMessage, onDeleteChat, onCreatePost, onUpdateTitle }: ChatRoomPageProps) {
   const [inputMessage, setInputMessage] = useState('');
   const [showSettings, setShowSettings] = useState(false);
   const [selectionMode, setSelectionMode] = useState(false);
   const [selectedMessages, setSelectedMessages] = useState<string[]>([]);
   const [shareAsAnonymous, setShareAsAnonymous] = useState(false);
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [changeTitle, setChangeTitle] = useState(false);
+  const [newTitle, setNewTitle] = useState(chatRoom.title);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const prevMessageCountRef = useRef(chatRoom.messages.length);
 
   // 메시지 추가될 때마다 스크롤 하단으로
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [chatRoom.messages, isGenerating]);
+
+  // 봇 응답이 도착했는지 감지
+  useEffect(() => {
+    const currentCount = chatRoom.messages.length;
+    const prevCount = prevMessageCountRef.current;
+    
+    // 메시지가 추가되고, 마지막 메시지가 봇 메시지면 생성 완료
+    if (currentCount > prevCount && chatRoom.messages[currentCount - 1]?.sender === 'bot') {
+      setIsGenerating(false);
+    }
+    
+    prevMessageCountRef.current = currentCount;
   }, [chatRoom.messages]);
 
   const handleSend = () => {
     if (!inputMessage.trim()) return;
 
+    setIsGenerating(true);
     onSendMessage(chatRoom.id, inputMessage);
     setInputMessage('');
     
@@ -137,7 +157,18 @@ export function ChatRoomPage({ chatRoom, onBack, onSendMessage, onDeleteChat, on
               <ArrowLeft className="w-6 h-6" />
             </button>
             <div className="flex-1 min-w-0">
-              <h2 className="font-bold text-gray-800 truncate">{chatRoom.title}</h2>
+              {changeTitle ? (<input type="text" value={newTitle} onChange={async (e) => {
+                setNewTitle(e.target.value);
+              }} onBlur={async () => {
+                await onUpdateTitle(chatRoom.id, newTitle);
+                setChangeTitle(false);
+              }} onKeyDown={async (e) => {
+                if (e.key === "Enter") {
+                  await onUpdateTitle(chatRoom.id, newTitle);
+                  setChangeTitle(false);
+                }
+              }}
+            />) : (<h2 className="font-bold text-gray-800 truncate" onClick={() => setChangeTitle(true)}>{chatRoom.title}</h2>)}
               <p className="text-xs text-gray-500">
                 {chatRoom.messages.length}개 메시지
               </p>
@@ -290,6 +321,25 @@ export function ChatRoomPage({ chatRoom, onBack, onSendMessage, onDeleteChat, on
                       </div>
                     </div>
                   ))}
+                  
+                  {/* Typing Indicator - shown when bot is generating */}
+                  {isGenerating && groupIdx === groupedMessages.length - 1 && (
+                    <div className="flex justify-start">
+                      <div className="max-w-[75%]">
+                        <div className="flex items-center gap-2 mb-1">
+                          <div className="bg-gradient-to-r from-pink-500 to-purple-500 w-6 h-6 rounded-full flex items-center justify-center">
+                            <span className="text-white text-xs font-bold">억</span>
+                          </div>
+                          <span className="text-xs text-gray-500 font-medium">억빠봇</span>
+                        </div>
+                        <div className="rounded-2xl px-4 py-3 bg-gradient-to-br from-yellow-50 to-pink-50 border-2 border-pink-200 text-gray-800">
+                          <p className="whitespace-pre-wrap break-words leading-relaxed animate-pulse">
+                            입력중...
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
             ))}

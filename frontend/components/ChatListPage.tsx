@@ -1,6 +1,8 @@
 'use client'
 
 import { Plus, MessageCircleHeart, ChevronRight } from 'lucide-react';
+import { use } from "react";
+import { fetchWithAuth } from "@/utils/apiClient";
 
 interface Message {
   id: string;
@@ -22,13 +24,38 @@ interface ChatRoom {
 }
 
 interface ChatListPageProps {
-  chatRooms: ChatRoom[];
   currentUser: { email: string; name: string };
   onSelectChat: (chatId: string) => void;
   onCreateNewChat: () => void;
 }
 
-export function ChatListPage({ chatRooms, currentUser, onSelectChat, onCreateNewChat }: ChatListPageProps) {
+// Create a cache to store the promise
+let chatCache: Promise<ChatRoom[]> | null = null;
+
+function fetchChatRooms(): Promise<ChatRoom[]> {
+  if (!chatCache) {
+    chatCache = fetchWithAuth('/chat')
+      .then(res => {
+        if (!res.ok) throw new Error('Failed to fetch chats');
+        return res.json();
+      })
+      .catch(err => {
+        chatCache = null; // Reset cache on error
+        throw err;
+      });
+  }
+  return chatCache;
+}
+
+// Export function to invalidate cache when needed
+export function invalidateChatCache() {
+  chatCache = null;
+}
+
+export function ChatListPage({ currentUser, onSelectChat, onCreateNewChat }: ChatListPageProps) {
+  // Fetch chat rooms using Suspense
+  const chatRooms = use(fetchChatRooms());
+  
   // 내 채팅방만 필터링
   const myChats = chatRooms
     .filter(c => c.authorEmail === currentUser.email)
@@ -37,7 +64,7 @@ export function ChatListPage({ chatRooms, currentUser, onSelectChat, onCreateNew
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
     const now = new Date();
-    const diffMs = now.getTime() - date.getTime();
+    const diffMs = now.getTime() - date.getTime() - 32400000;
     const diffMins = Math.floor(diffMs / 60000);
     const diffHours = Math.floor(diffMs / 3600000);
     const diffDays = Math.floor(diffMs / 86400000);

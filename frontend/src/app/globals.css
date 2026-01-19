@@ -12,15 +12,31 @@
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
+/* @media (prefers-color-scheme: dark) {
   :root {
     --background: #0a0a0a;
     --foreground: #ededed;
   }
+} */
+
+html, body {
+  height: 100%;
+  margin: 0;
+  background: #fff; /* 앱 배경색과 동일 */
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
+
+  /* iOS 노치/홈바 영역 여백을 안전하게 처리 */
+  /* padding-top: env(safe-area-inset-top);
+  padding-bottom: env(safe-area-inset-bottom); */
+  padding: 0;
+}
+
+/* Next App Router 루트 */
+main {
+  min-height: 100dvh; /* 100vh 대신 100dvh 권장 */
 }

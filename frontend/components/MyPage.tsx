@@ -291,19 +291,36 @@ export function MyPage({ currentUser, onNavigate, onDeleteComment, onDeletePost,
                 return (
                   <div
                     key={comment.id}
-                    className="bg-white rounded-2xl shadow-lg p-6 hover:shadow-xl transition-shadow"
+                    className="bg-white rounded-2xl shadow-lg p-6 hover:shadow-xl transition-shadow flex flex-col"
                   >
                     {/* Comment Header */}
-                    <div className="flex items-center justify-between mb-3">
-                      <div className="flex items-center gap-3">
-                        <div className="bg-gradient-to-r from-pink-500 to-purple-500 w-8 h-8 rounded-full flex items-center justify-center text-white font-bold text-sm">
-                          {comment.author[0]}
-                        </div>
-                        <div>
-                          <p className="font-semibold text-gray-800 text-sm">{comment.author}</p>
-                          <p className="text-xs text-gray-500">{formatDate(comment.timestamp)}</p>
-                        </div>
+                    <div className="flex items-center gap-3 mb-3">
+                      <div className="bg-gradient-to-r from-pink-500 to-purple-500 w-8 h-8 rounded-full flex items-center justify-center text-white font-bold text-sm">
+                        {comment.author[0]}
                       </div>
+                      <div>
+                        <p className="font-semibold text-gray-800 text-sm">{comment.author}</p>
+                        <p className="text-xs text-gray-500">{formatDate(comment.timestamp)}</p>
+                      </div>
+                    </div>
+                    {/* Original Post Preview */}
+                    {post && (
+                      <div 
+                        onClick={() => onNavigate('community')}
+                        className="border-l-4 border-purple-300 pl-3 cursor-pointer hover:bg-purple-50 p-2 rounded transition-colors mb-2"
+                      >
+                        <p className="text-xs text-gray-500 mb-1">원문 포스트</p>
+                        <p className="text-sm text-gray-700">
+                          {truncateText(post.messages[0]?.content || '', 80)}
+                        </p>
+                      </div>
+                    )}
+                    {/* Comment Content */}
+                    <div className="bg-white rounded-lg p-3 mb-3">
+                      <p className="text-gray-800">{comment.content}</p>
+                    </div>
+                    {/* Delete Button 하단 좌측 정렬 */}
+                    <div className="flex justify-start mt-2">
                       <button
                         onClick={async () => {
                           if (confirm('이 댓글을 삭제하시겠어요?')) {
@@ -315,22 +332,6 @@ export function MyPage({ currentUser, onNavigate, onDeleteComment, onDeletePost,
                       >
                         삭제
                       </button>
-                    </div>
-                    {/* Original Post Preview */}
-                    {post && (
-                      <div 
-                        onClick={() => onNavigate('community')}
-                        className="border-l-4 border-purple-300 pl-3 cursor-pointer hover:bg-purple-50 p-2 rounded transition-colors"
-                      >
-                        <p className="text-xs text-gray-500 mb-1">원문 포스트</p>
-                        <p className="text-sm text-gray-700">
-                          {truncateText(post.messages[0]?.content || '', 80)}
-                        </p>
-                      </div>
-                    )}
-                    {/* Comment Content */}
-                    <div className="bg-white rounded-lg p-3 mb-3">
-                      <p className="text-gray-800">{comment.content}</p>
                     </div>
                   </div>
                 );
@@ -356,7 +357,7 @@ export function MyPage({ currentUser, onNavigate, onDeleteComment, onDeletePost,
                     : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                 }`}
               >
-                😇 위로동생
+                😇 위로형
               </button>
               <button
                 onClick={() => setStyle('funny')}

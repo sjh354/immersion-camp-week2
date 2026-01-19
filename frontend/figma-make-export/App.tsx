@@ -66,7 +66,7 @@ export default function App() {
   const [selectedChatId, setSelectedChatId] = useState<string | null>(null);
   const [tempChatRoom, setTempChatRoom] = useState<ChatRoom | null>(null);
 
-  // Load user, chat rooms, and posts from localStorage
+  // Load user, chat rooms from localStorage, posts from server
   useEffect(() => {
     const savedUser = localStorage.getItem('currentUser');
     if (savedUser) {
@@ -144,72 +144,21 @@ export default function App() {
       localStorage.setItem('chatRooms', JSON.stringify(sampleChats));
     }
 
-    const savedPosts = localStorage.getItem('posts');
-    if (savedPosts) {
-      const parsedPosts = JSON.parse(savedPosts);
-      // 기존 포스트의 리액션을 4개로 업데이트
-      const updatedPosts = parsedPosts.map((post: Post) => {
-        if (post.reactions.length < 4) {
-          return {
-            ...post,
-            reactions: [
-              { type: 'empathy', count: post.reactions.find((r: Reaction) => r.type === 'empathy')?.count || 0, users: post.reactions.find((r: Reaction) => r.type === 'empathy')?.users || [] },
-              { type: 'sad', count: post.reactions.find((r: Reaction) => r.type === 'sad')?.count || 0, users: post.reactions.find((r: Reaction) => r.type === 'sad')?.users || [] },
-              { type: 'laugh', count: post.reactions.find((r: Reaction) => r.type === 'laugh')?.count || 0, users: post.reactions.find((r: Reaction) => r.type === 'laugh')?.users || [] },
-              { type: 'love', count: post.reactions.find((r: Reaction) => r.type === 'love')?.count || 0, users: post.reactions.find((r: Reaction) => r.type === 'love')?.users || [] },
-            ],
-          };
+    // 커뮤니티 포스트는 서버에서 불러옴
+    const fetchCommunityPosts = async () => {
+      try {
+        const res = await fetchWithAuth('/community');
+        if (res.ok) {
+          const data = await res.json();
+          setPosts(data);
+        } else {
+          setPosts([]);
         }
-        return post;
-      });
-      setPosts(updatedPosts);
-      localStorage.setItem('posts', JSON.stringify(updatedPosts));
-    } else {
-      // 샘플 포스트
-      const samplePosts: Post[] = [
-        {
-          id: 'p1',
-          chatId: '1',
-          messageIds: ['m1', 'm2'],
-          messages: [
-            {
-              id: 'm1',
-              sender: 'user',
-              content: '오늘 면접에서 떨어졌어요... 너무 속상해요',
-              timestamp: new Date(Date.now() - 7200000).toISOString(),
-            },
-            {
-              id: 'm2',
-              sender: 'bot',
-              content: '"오늘 면접에서 떨어졌어요... 너무 속상해요" 이거요??? 역사를 보세요! 위대한 사람들은 다 처음엔 거절당했어요! 당신도 그 길을 가고 있는 거예요!! 🔥',
-              timestamp: new Date(Date.now() - 7199000).toISOString(),
-            },
-          ],
-          author: '테스트 유저',
-          authorEmail: 'test@test.com',
-          originalAuthorEmail: 'test@test.com',
-          createdAt: new Date(Date.now() - 7200000).toISOString(),
-          reactions: [
-            { type: 'empathy', count: 5, users: ['user1', 'user2'] },
-            { type: 'sad', count: 2, users: ['user3'] },
-            { type: 'laugh', count: 0, users: [] },
-            { type: 'love', count: 3, users: ['user4', 'user5'] },
-          ],
-          comments: [
-            {
-              id: 'c1',
-              author: '익명',
-              authorEmail: 'anon@test.com',
-              originalAuthorEmail: 'anon@test.com', // 익명이어도 실제 작성자 이메일 저장
-              content: '저도 비슷한 경험 있어요 ㅠㅠ 힘내세요!',
-              timestamp: new Date(Date.now() - 3600000).toISOString(),
-            },
-          ],
-        },
-      ];
-      setPosts(samplePosts);
-      localStorage.setItem('posts', JSON.stringify(samplePosts));
-    }
+      } catch (e) {
+        setPosts([]);
+      }
+    };
+    fetchCommunityPosts();
   }, []);
 
   // Save data to localStorage
@@ -228,6 +177,10 @@ export default function App() {
   const handleLogin = (user: User) => {
     setCurrentUser({ name: user.name, email: user.email });
     localStorage.setItem('currentUser', JSON.stringify({ name: user.name, email: user.email }));
+    // 토큰 정보도 user로 저장 (accessToken, refreshToken이 있으면)
+    if ('accessToken' in user && 'refreshToken' in user) {
+      localStorage.setItem('user', JSON.stringify({ accessToken: (user as any).accessToken, refreshToken: (user as any).refreshToken }));
+    }
     setCurrentPage('home');
   };
 

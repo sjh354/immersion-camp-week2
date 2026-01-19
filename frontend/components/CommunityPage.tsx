@@ -57,9 +57,9 @@ const reactionIcons = {
 
 export function CommunityPage({ posts, currentUser, onReactToPost, onAddComment, onDeletePost, onDeleteComment }: CommunityPageProps) {
   const [commentInputs, setCommentInputs] = useState<{ [postId: string]: string }>({});
-  // 모든 댓글을 기본적으로 펼친 상태로 초기화
+  // 모든 댓글을 기본적으로 숨김 상태로 초기화
   const initialExpandedState = posts.reduce((acc, post) => {
-    acc[post.id] = true;
+    acc[post.id] = false;
     return acc;
   }, {} as { [key: string]: boolean });
   const [expandedPosts, setExpandedPosts] = useState<{ [postId: string]: boolean }>(initialExpandedState);
@@ -115,7 +115,7 @@ export function CommunityPage({ posts, currentUser, onReactToPost, onAddComment,
         </div>
       ) : (
         <div className="space-y-6">
-          {posts.map((post) => {
+          {[...posts].reverse().map((post) => {
             const totalReactions = post.reactions.reduce((sum, r) => sum + r.count, 0);
             const isExpanded = expandedPosts[post.id];
 
@@ -254,44 +254,46 @@ export function CommunityPage({ posts, currentUser, onReactToPost, onAddComment,
                   </div>
                 )}
 
-                {/* Comment Input */}
-                <div className="space-y-2 mt-4">
-                  <div className="flex items-center gap-3">
-                    <label className="flex items-center gap-2 cursor-pointer">
+                {/* Comment Input: 댓글이 펼쳐졌을 때만 보임 */}
+                {isExpanded && (
+                  <div className="space-y-2 mt-4">
+                    <div className="flex items-center gap-3">
+                      <label className="flex items-center gap-2 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={commentAnonymous[post.id] || false}
+                          onChange={(e) => setCommentAnonymous(prev => ({ ...prev, [post.id]: e.target.checked }))}
+                          className="w-4 h-4 text-purple-600 border-gray-300 rounded focus:ring-purple-500"
+                        />
+                        <span className="text-sm text-gray-700">익명으로 작성</span>
+                      </label>
+                      {commentAnonymous[post.id] && (
+                        <span className="text-xs text-gray-500">"익명"으로 표시돼요</span>
+                      )}
+                    </div>
+                    <div className="flex items-end gap-2">
                       <input
-                        type="checkbox"
-                        checked={commentAnonymous[post.id] || false}
-                        onChange={(e) => setCommentAnonymous(prev => ({ ...prev, [post.id]: e.target.checked }))}
-                        className="w-4 h-4 text-purple-600 border-gray-300 rounded focus:ring-purple-500"
+                        type="text"
+                        value={commentInputs[post.id] || ''}
+                        onChange={(e) => setCommentInputs(prev => ({ ...prev, [post.id]: e.target.value }))}
+                        onKeyPress={(e) => {
+                          if (e.key === 'Enter') {
+                            handleCommentSubmit(post.id);
+                          }
+                        }}
+                        placeholder="댓글을 입력하세요..."
+                        className="flex-1 px-4 py-2 border-2 border-gray-200 rounded-lg focus:border-purple-400 focus:outline-none text-sm"
                       />
-                      <span className="text-sm text-gray-700">익명으로 작성</span>
-                    </label>
-                    {commentAnonymous[post.id] && (
-                      <span className="text-xs text-gray-500">"익명"으로 표시돼요</span>
-                    )}
+                      <button
+                        onClick={() => handleCommentSubmit(post.id)}
+                        disabled={!commentInputs[post.id]?.trim()}
+                        className="bg-gradient-to-r from-pink-500 to-purple-500 text-white p-2 rounded-lg hover:from-pink-600 hover:to-purple-600 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+                      >
+                        <Send className="w-5 h-5" />
+                      </button>
+                    </div>
                   </div>
-                  <div className="flex items-end gap-2">
-                    <input
-                      type="text"
-                      value={commentInputs[post.id] || ''}
-                      onChange={(e) => setCommentInputs(prev => ({ ...prev, [post.id]: e.target.value }))}
-                      onKeyPress={(e) => {
-                        if (e.key === 'Enter') {
-                          handleCommentSubmit(post.id);
-                        }
-                      }}
-                      placeholder="댓글을 입력하세요..."
-                      className="flex-1 px-4 py-2 border-2 border-gray-200 rounded-lg focus:border-purple-400 focus:outline-none text-sm"
-                    />
-                    <button
-                      onClick={() => handleCommentSubmit(post.id)}
-                      disabled={!commentInputs[post.id]?.trim()}
-                      className="bg-gradient-to-r from-pink-500 to-purple-500 text-white p-2 rounded-lg hover:from-pink-600 hover:to-purple-600 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
-                    >
-                      <Send className="w-5 h-5" />
-                    </button>
-                  </div>
-                </div>
+                )}
               </div>
             );
           })}

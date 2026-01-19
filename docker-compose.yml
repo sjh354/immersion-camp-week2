@@ -17,13 +17,17 @@ services:
     # depends_on:
     #   - nginx
     
-  # cloudflared:
-  #   image: cloudflare/cloudflared:latest
-  #   container_name: cloudflared
-  #   command: tunnel run
-  #   restart: unless-stopped
-  #   volumes:
-  #     - ./cloudflared:/etc/cloudflared
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    container_name: cloudflared
+    command: tunnel run
+    environment:
+      - TUNNEL_TOKEN=${CLOUDFLARE_TUNNEL_TOKEN}
+    restart: unless-stopped
+    volumes:
+      - ./cloudflared:/etc/cloudflared
+    networks:
+      - app_net
 
   nginx:
     container_name: nginx
@@ -89,9 +93,6 @@ services:
     networks:
       - app_net
     restart: unless-stopped
-    # 외부 노출 불필요(권장)
-    # ports:
-    #   - "5432:5432"
 
 volumes:
   pgdata:

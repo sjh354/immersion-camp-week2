@@ -1,3 +1,52 @@
+# 내가 좋아요한 포스트 목록 조회
+@app.route('/my/likes', methods=['GET'])
+@require_auth
+def get_my_likes():
+    user = User.query.get(g.user_id)
+    if not user:
+        return jsonify({"error": "User not found"}), 404
+
+    from models import Like, Post
+    likes = Like.query.filter_by(user_id=g.user_id).order_by(Like.created_at.desc()).all()
+    post_ids = [like.post_id for like in likes]
+    posts = Post.query.filter(Post.id.in_(post_ids)).all()
+
+    # 최신순으로 정렬 (Like.created_at 기준)
+    post_dict = {str(post.id): post for post in posts}
+    results = []
+    for like in likes:
+        post = post_dict.get(str(like.post_id))
+        if not post:
+            continue
+        author = User.query.get(post.user_id)
+        # Fetch messages in the post
+        post_msgs = []
+        if post.msgs:
+            for m_id in post.msgs:
+                msg = Message.query.get(m_id)
+                if msg:
+                    post_msgs.append({
+                        "id": str(msg.id),
+                        "sender": "user" if msg.role == "user" else "bot",
+                        "content": msg.content,
+                        "timestamp": msg.created_at.isoformat() if msg.created_at else None
+                    })
+        from models import Like as LikeModel
+        like_count = db.session.query(LikeModel).filter_by(post_id=post.id).count()
+        results.append({
+            "id": str(post.id),
+            "chatId": "",
+            "messageIds": [str(m_id) for m_id in post.msgs] if post.msgs else [],
+            "messages": post_msgs,
+            "author": author.display_name if author else "Unknown",
+            "authorEmail": author.email if author else "",
+            "createdAt": post.created_at.isoformat() if post.created_at else None,
+            "reactions": [
+                {"type": "empathy", "count": like_count, "users": []}
+            ],
+            "comments": [] # Comments are now fetched via /community/comment
+        })
+    return jsonify(results)
 import os
 import jwt
 import requests
@@ -188,13 +237,14 @@ def manage_user_profile():
     if not data:
         return jsonify({"error": "No data provided"}), 400
         
+    if 'name' in data:
+        user.display_name = data['name']
     if 'mbti' in data:
         user.setting_mbti = data['mbti']
     if 'intensity' in data:
         user.setting_intensity = data['intensity']
     if 'style' in data:
         user.style = data['style']
-        
     db.session.commit()
     return jsonify({"message": "Settings updated successfully"})
 
@@ -311,6 +361,23 @@ def logout():
     return jsonify({"message": "Logged out successfully"})
 
 # --- Chat ---
+
+# 채팅방 이름 변경 API
+@app.route('/chat', methods=['PATCH'])
+@require_auth
+def update_chat_room_title():
+    data = request.get_json() or {}
+    conversation_id = data.get('conversation_id')
+    new_title = data.get('title')
+    if not conversation_id or not new_title:
+        return jsonify({"error": "conversation_id와 title이 필요합니다."}), 400
+    conv = Conversation.query.filter_by(id=conversation_id, user_id=g.user_id).first()
+    if not conv:
+        return jsonify({"error": "Conversation not found or access denied"}), 404
+    conv.title = new_title
+    conv.updated_at = datetime.datetime.utcnow()
+    db.session.commit()
+    return jsonify({"message": "채팅방 이름이 변경되었습니다.", "id": str(conv.id), "title": conv.title})
 
 @app.route('/chat', methods=['GET'])
 @require_auth
@@ -577,12 +644,13 @@ def create_community_post():
 @app.route('/community', methods=['GET'])
 @require_auth
 def get_community_posts():
-    posts = Post.query.all()
-    
+    # 최신순(생성일 내림차순)으로 정렬
+    posts = Post.query.order_by(Post.created_at.desc()).all()
+
     results = []
     for p in posts:
         author = User.query.get(p.user_id)
-        
+
         # Fetch messages in the post
         post_msgs = []
         if p.msgs:
@@ -595,10 +663,10 @@ def get_community_posts():
                         "content": msg.content,
                         "timestamp": msg.created_at.isoformat() if msg.created_at else None
                     })
-        
-        from models import LIKE
-        like_count = db.session.query(LIKE).filter_by(post_id=p.id).count()
-        
+
+        from models import Like
+        like_count = db.session.query(Like).filter_by(post_id=p.id).count()
+
         results.append({
             "id": str(p.id),
             "chatId": "", 
@@ -612,7 +680,8 @@ def get_community_posts():
             ],
             "comments": [] # Comments are now fetched via /community/comment
         })
-    
+
+    # 최신순 정렬된 결과를 그대로 반환 (최신글이 배열 첫 번째에 오도록)
     return jsonify(results)
 
 @app.route('/community/<post_id>', methods=['DELETE'])

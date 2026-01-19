@@ -99,6 +99,7 @@ const myComments = user
     )
   : [];
 
+  // 한 번만 실행: 로컬 스토리지에서 사용자 정보 복원
   useEffect(() => {
     if (typeof window !== 'undefined') {
       const storedUser = localStorage.getItem("user");
@@ -106,7 +107,20 @@ const myComments = user
         setUser(JSON.parse(storedUser));
       }
     }
-  }, []);
+  }, []); // Run once on mount
+
+  // 한 번만 실행: 닉네임 변경 시스템 이벤트 리스너
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const handleNicknameChange = (e: any) => {
+        if (e.detail?.name) {
+          setUser((prev) => prev ? { ...prev, name: e.detail.name } : null);
+        }
+      };
+      window.addEventListener('nicknameChanged', handleNicknameChange);
+      return () => window.removeEventListener('nicknameChanged', handleNicknameChange);
+    }
+  }, []); // Run once on mount
 
   useEffect(() => {
     const fetchData = async () => {

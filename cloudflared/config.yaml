@@ -1,0 +1,10 @@
+# Cloudflare Tunnel Configuration (Local Management)
+# Note: If you use "Remote Configuration" in the Cloudflare Dashboard, this file is NOT required.
+
+tunnel: 4aee12eb-c173-4630-a8a4-474101404bf5
+credentials-file: /etc/cloudflared/credentials.json
+
+ingress:
+  - hostname: eokbba.shop
+    service: http://nginx:80
+  - service: http_status:404

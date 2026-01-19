@@ -9,6 +9,7 @@ from flask_sqlalchemy import SQLAlchemy
 from werkzeug.security import generate_password_hash, check_password_hash
 from dotenv import load_dotenv
 from sqlalchemy import text
+import threading
 
 # Load environment variables
 load_dotenv()
@@ -348,6 +349,22 @@ def get_chat_room():
     
     return jsonify(results)
 
+@app.route('/chat', methods=['DELETE'])
+@require_auth
+def delete_chat_room():
+    conversation_id = request.args.get('conversation_id')
+    if not conversation_id:
+        return jsonify({"error": "conversation_id is required"}), 400
+        
+    conv = Conversation.query.filter_by(id=conversation_id, user_id=g.user_id).first()
+    if not conv:
+        return jsonify({"error": "Conversation not found or access denied"}), 404
+        
+    db.session.delete(conv)
+    db.session.commit()
+    
+    return jsonify({"message": "Conversation deleted"}), 200
+
 @app.route('/chat', methods=['POST'])
 @require_auth
 def create_chat_room():
@@ -426,12 +443,71 @@ def add_chat_message():
     
     db.session.commit()
     
+    # Trigger chatbot response in background if it's a user message
+    if role == 'user':
+        # Get user settings for persona
+        thread = threading.Thread(target=trigger_chatbot_response, args=(app.config['SQLALCHEMY_DATABASE_URI'], conversation_id, g.user_id))
+        thread.start()
+        
     return jsonify({
         "id": str(new_msg.id),
         "sender": "user" if new_msg.role == "user" else "bot",
         "content": new_msg.content,
         "timestamp": new_msg.created_at.isoformat() if new_msg.created_at else None
     }), 201
+
+def trigger_chatbot_response(db_url, conversation_id, user_id):
+    # Use a new app context for the thread
+    from models import db, User, Conversation, Message
+    from sqlalchemy import create_engine
+    from sqlalchemy.orm import sessionmaker
+    
+    engine = create_engine(db_url)
+    Session = sessionmaker(bind=engine)
+    session = Session()
+    
+    try:
+        user = session.query(User).get(user_id)
+        if not user:
+            return
+
+        # Fetch conversation history
+        messages = session.query(Message).filter_by(conversation_id=conversation_id).order_by(Message.created_at.asc()).all()
+        
+        # Prepare messages for LLM
+        formatted_history = []
+        
+        # Add system prompt (Persona)
+        system_content = f"너는 사용자의 말에 무조건 공감하고 편들어주는 '찐친' AI야. 사용자의 MBTI는 {user.setting_mbti}이고, 공감 강도는 {user.setting_intensity} 수준이야. 말투 스타일은 {user.style}이야."
+        system_content += "\n1. '죄송합니다', '하지만', '그렇지만', '도움이 필요하다면' 같은 가르치는 말투나 사과를 절대 쓰지 마.\n2. 해결책을 제시하지 마. 그냥 감정을 같이 느껴줘.\n3. 문장은 짧고 구어체(반말)로 해.\n4. 무조건 한국어로만 대답해."
+        
+        formatted_history.append({"role": "system", "content": system_content})
+        
+        for m in messages:
+            role = "user" if m.role == "user" else "assistant"
+            formatted_history.append({"role": role, "content": m.content})
+            
+        # Temporarily use fixed response due to storage/LLM loading
+        # TODO: Remove this when storage/LLM loading is fixed
+        bot_content = "헉 정말?? 말도 안 돼"
+        
+        # Save bot message
+        bot_msg = Message(
+            conversation_id=conversation_id,
+            user_id=user_id,
+            role='bot',
+            content=bot_content
+        )
+        session.add(bot_msg)
+        # Update conversation
+        conv = session.query(Conversation).get(conversation_id)
+        conv.updated_at = datetime.datetime.utcnow()
+        session.commit()
+            
+    except Exception as e:
+        print(f"Error in trigger_chatbot_response: {e}")
+    finally:
+        session.close()
 
 # --- Community ---
 

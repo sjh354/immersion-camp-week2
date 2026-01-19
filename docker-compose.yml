@@ -74,6 +74,24 @@ services:
       - app_net
     restart: unless-stopped
 
+  # llm-inference:
+  #   build:
+  #     context: ./llm
+  #     dockerfile: Dockerfile
+  #   container_name: llm-inference
+  #   deploy:
+  #     resources:
+  #       reservations:
+  #         devices:
+  #           - driver: nvidia
+  #             count: 1
+  #             capabilities: [gpu]
+  #   volumes:
+  #     - ./llm:/app
+  #   networks:
+  #     - app_net
+  #   restart: unless-stopped
+
   db:
     image: pgvector/pgvector:pg16
     container_name: db

@@ -173,6 +173,8 @@ const myComments = user
 
     if (currentPage === "chat-room") {
       fetchMessages();
+      const interval = setInterval(fetchMessages, 1000); // Poll every 1 seconds
+      return () => clearInterval(interval);
     }
   }, [currentChatId, currentPage]);
 
@@ -246,7 +248,23 @@ const myComments = user
     setCurrentPage("chat-room");
   };
 
-  const handleBackToList = () => {
+  const handleBackToList = async () => {
+    if (currentChatId) {
+      const room = chatRooms.find((c) => c.id === currentChatId);
+      // Only delete if there are no messages
+      if (room && room.messages.length === 0) {
+        try {
+          const resp = await fetchWithAuth(`/chat?conversation_id=${currentChatId}`, {
+            method: 'DELETE',
+          });
+          if (resp.ok) {
+            setChatRooms((prev) => prev.filter((c) => c.id !== currentChatId));
+          }
+        } catch (err) {
+          console.error("Failed to delete empty chat room:", err);
+        }
+      }
+    }
     setCurrentPage("chat-list");
     setCurrentChatId(null);
   };
@@ -411,12 +429,23 @@ const myComments = user
     }
   };
 
-  const handleDeleteChat = (chatId: string) => {
-    setChatRooms((prev) => prev.filter((c) => c.id !== chatId));
-    setPosts((prev) => prev.filter((p) => p.chatId !== chatId));
-    if (currentChatId === chatId) {
-      setCurrentPage("chat-list");
-      setCurrentChatId(null);
+  const handleDeleteChat = async (chatId: string) => {
+    try {
+      const resp = await fetchWithAuth(`/chat?conversation_id=${chatId}`, {
+        method: 'DELETE',
+      });
+      if (resp.ok) {
+        setChatRooms((prev) => prev.filter((c) => c.id !== chatId));
+        setPosts((prev) => prev.filter((p) => p.chatId !== chatId));
+        if (currentChatId === chatId) {
+          setCurrentPage("chat-list");
+          setCurrentChatId(null);
+        }
+      } else {
+        console.error("Failed to delete chat room:", await resp.text());
+      }
+    } catch (err) {
+      console.error("Error deleting chat room:", err);
     }
   };
 

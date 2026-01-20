@@ -10,7 +10,8 @@ import { MyPage } from "@/components/MyPage";
 import { MessageCircleHeart } from "lucide-react";
 import { fetchWithAuth, clearTokens, updateUser } from "@/utils/apiClient";
 import { ChatDetailPage } from "@/components/ChatDetailPage";
-// import { PushEnableButton } from "@/components/PushEnableButton";
+import PushEnableButton from "@/components/PushEnableButton";
+
 
 export interface User {
   name: string;
@@ -71,6 +72,7 @@ interface Post {
   createdAt: string;
   reactions: Reaction[];
   comments: Comment[];
+  likedByMe?: boolean;
 }
 
 export default function Home() {
@@ -79,6 +81,26 @@ export default function Home() {
   const [currentChatId, setCurrentChatId] = useState<string | null>(null);
   const [chatRooms, setChatRooms] = useState<ChatRoom[]>([]);
   const [posts, setPosts] = useState<Post[]>([]);
+  
+  // 좋아요 서버 요청 중인 포스트 id 집합
+  const [likingPostIds, setLikingPostIds] = useState<Set<string>>(new Set());
+  const [isPWA, setIsPWA] = useState(false);
+  
+    useEffect(() => {
+      // PWA 모드 감지
+      const isStandalone = window.matchMedia('(display-mode: standalone)').matches || 
+                          (window.navigator as any).standalone;
+      setIsPWA(isStandalone);
+    }, []);
+
+
+  // 마이페이지 진입 시 서버에서 최신 유저 정보 동기화
+  useEffect(() => {
+    if (currentPage === 'mypage') {
+      fetchUserProfile();
+    }
+    // eslint-disable-next-line
+  }, [currentPage]);
 
   type Page = "chat-list" | "chat-room" | "community" | "mypage";
 
@@ -155,7 +177,8 @@ const myComments = user
                 const commentRes = await fetchWithAuth(`/community/comment?post_id=${post.id}`);
                 if (commentRes.ok) {
                   const comments = await commentRes.json();
-                  return { ...post, comments };
+                  // likedByMe 필드가 누락되지 않도록 명시적으로 복사
+                  return { ...post, comments, likedByMe: post.likedByMe };
                 }
               } catch (err) {
                 console.error(`Failed to fetch comments for post ${post.id}:`, err);
@@ -163,7 +186,6 @@ const myComments = user
               return post;
             })
           );
-          
           setPosts(postsWithComments);
         }
       } catch (err) {
@@ -211,7 +233,17 @@ const myComments = user
   }, [user]);
 
   const handleLogin = (userData: User) => {
-    setUser(userData);
+    // 닉네임, 나이, 성별이 있으면 User 객체에 반영
+    setUser(prev => {
+      // userData에 age, gender, name이 있으면 우선 반영
+      return {
+        ...prev,
+        ...userData,
+        name: userData.name ?? prev?.name ?? '',
+        age: userData.age ?? prev?.age ?? '',
+        gender: userData.gender ?? prev?.gender ?? '',
+      };
+    });
   };
 
   const fetchUserProfile = async () => {
@@ -292,14 +324,14 @@ const myComments = user
     setCurrentChatId(null);
   };
 
-  const handleSendMessage = async (chatId: string, content: string, category?: string, style?: string) => {
+  const handleSendMessage = async (chatId: string, content: string, category?: string, style?: string, useLocalLLM?: boolean) => {
     try {
       const resp = await fetchWithAuth(`/chat/messages?conversation_id=${chatId}`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ content, role: 'user' }), // role defaults to user
+        body: JSON.stringify({ content, role: 'user', useLocalLLM: useLocalLLM }), // role defaults to user
       });
 
       if (resp.ok) {
@@ -350,34 +382,68 @@ const myComments = user
     }
   };
 
-  const handleReaction = (postId: string, reactionType: Reaction["type"]) => {
+  const handleReaction = async (postId: string, reactionType: Reaction["type"]) => {
     if (!user) return;
+    if (likingPostIds.has(postId)) return; // 연타 방지
 
-    setPosts((prev) =>
-      prev.map((post) => {
-        if (post.id === postId) {
-          const reactions = post.reactions.map((r) => {
-            if (r.type === reactionType) {
-              const hasReacted = r.users.includes(user.email);
-              return {
-                ...r,
-                count: hasReacted ? r.count - 1 : r.count + 1,
-                users: hasReacted
-                  ? r.users.filter((u) => u !== user.email)
-                  : [...r.users, user.email],
-              };
+    // 좋아요 서버 요청 중 표시
+    setLikingPostIds(prev => new Set(prev).add(postId));
+
+    // 1. 현재 좋아요 상태 판단 (likedByMe 기준)
+    const post = posts.find((p) => p.id === postId);
+    const isLiked = !!post?.likedByMe;
+
+    // 2. optimistic UI update (likedByMe, reactions.count, reactions.users 모두 즉시 반영)
+    setPosts((prev) => {
+      return prev.map((p) => {
+        if (p.id !== postId) return p;
+        let newLikedByMe = p.likedByMe;
+        const reactions = p.reactions.map((r) => {
+          if (r.type === reactionType) {
+            const hasReacted = r.users.includes(user.email);
+            // 실제 토글될 때만 count 증감
+            if (reactionType === "empathy") {
+              newLikedByMe = !hasReacted;
             }
             return {
               ...r,
-              count: r.users.includes(user.email) ? r.count - 1 : r.count,
-              users: r.users.filter((u) => u !== user.email),
+              count: hasReacted ? Math.max(0, r.count - 1) : r.count + 1,
+              users: hasReacted
+                ? r.users.filter((u) => u !== user.email)
+                : [...r.users, user.email],
             };
-          });
-          return { ...post, reactions };
+          }
+          return r;
+        });
+        return {
+          ...p,
+          likedByMe: reactionType === "empathy" ? newLikedByMe : p.likedByMe,
+          reactions,
+        };
+      });
+    });
+
+    // 3. 서버에 동기화 (POST: 추가, DELETE: 취소)
+    if (reactionType === "empathy") {
+      const method = isLiked ? "DELETE" : "POST";
+      try {
+        await fetchWithAuth(`/community/${postId}/like`, { method });
+        // 서버에서 최신 포스트 데이터 받아와서 동기화
+        const resp = await fetchWithAuth(`/community/${postId}`);
+        if (resp.ok) {
+          const updatedPost = await resp.json();
+          setPosts((prev) => prev.map((p) => p.id === postId ? { ...p, ...updatedPost } : p));
         }
-        return post;
-      })
-    );
+      } catch (err) {
+        console.error("좋아요 동기화 실패:", err);
+      }
+    }
+    // 서버 요청 끝나면 연타 방지 해제
+    setLikingPostIds(prev => {
+      const next = new Set(prev);
+      next.delete(postId);
+      return next;
+    });
   };
 
   const handleComment = async (postId: string, content: string, isAnonymous: boolean = false) => {
@@ -507,7 +573,7 @@ const myComments = user
       onNavigate={navigate}
       onLogout={handleLogout}
     >
-      {/* <PushEnableButton /> */}
+      {isPWA ? <PushEnableButton /> : null}
       {currentPage === "chat-list" && (
         <Suspense fallback={
           <div className="max-w-4xl mx-auto pb-24">
@@ -549,9 +615,10 @@ const myComments = user
           onAddComment={handleComment}
           onDeletePost={handleDeletePost}
           onDeleteComment={handleDeleteComment}
+          likingPostIds={likingPostIds}
         />
       )}
-            {currentPage === "mypage" && (
+      {currentPage === "mypage" && (
         <MyPage
           currentUser={user}
           setCurrentUser={setUser}
@@ -564,3 +631,7 @@ const myComments = user
     </Layout>
   );
 }
+
+// 마이페이지 진입 시 서버에서 최신 유저 정보 동기화
+// 반드시 컴포넌트 함수 내부 최상단에서 호출되어야 함
+// (컴포넌트 return 이후에 훅 호출 불가)

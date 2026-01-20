@@ -26,7 +26,7 @@ interface ChatRoom {
 interface ChatRoomPageProps {
   chatRoom: ChatRoom;
   onBack: () => void;
-  onSendMessage: (chatId: string, content: string, category?: string, style?: string) => void;
+  onSendMessage: (chatId: string, content: string, category?: string, style?: string, useLocalLLM?: boolean) => void;
   onDeleteChat: (chatId: string) => void;
   onCreatePost: (chatId: string, messageIds: string[], isAnonymous?: boolean) => void;
   onUpdateTitle: (chatId: string, title: string) => void;
@@ -41,6 +41,7 @@ export function ChatRoomPage({ chatRoom, onBack, onSendMessage, onDeleteChat, on
   const [isGenerating, setIsGenerating] = useState(false);
   const [changeTitle, setChangeTitle] = useState(false);
   const [newTitle, setNewTitle] = useState(chatRoom.title);
+  const [localLLM, setLocalLLM] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const prevMessageCountRef = useRef(chatRoom.messages.length);
@@ -48,7 +49,7 @@ export function ChatRoomPage({ chatRoom, onBack, onSendMessage, onDeleteChat, on
   // 메시지 추가될 때마다 스크롤 하단으로
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [chatRoom.messages, isGenerating]);
+  }, [isGenerating]);
 
   // 봇 응답이 도착했는지 감지
   useEffect(() => {
@@ -64,11 +65,17 @@ export function ChatRoomPage({ chatRoom, onBack, onSendMessage, onDeleteChat, on
     prevMessageCountRef.current = currentCount;
   }, [chatRoom.messages]);
 
+  useEffect(() => {
+    setTimeout(() => {
+      inputRef.current?.focus();
+    }, 100);
+  }, []);
+
   const handleSend = () => {
     if (!inputMessage.trim()) return;
 
     setIsGenerating(true);
-    onSendMessage(chatRoom.id, inputMessage);
+    onSendMessage(chatRoom.id, inputMessage, undefined, undefined, localLLM);
     setInputMessage('');
     
     // 입력창 포커스 유지
@@ -245,6 +252,10 @@ export function ChatRoomPage({ chatRoom, onBack, onSendMessage, onDeleteChat, on
                     >
                       <Share2 className="w-4 h-4" />
                       <span>커뮤니티에 공유</span>
+                    </button>
+                    <button className="w-full px-4 py-2 text-sm text-left hover:bg-gray-100 transition-colors flex items-center gap-2">
+                      <input type='checkbox' checked={localLLM} onChange={(e) => setLocalLLM(e.target.checked)}></input>
+                      <span>내피땀눈물내마지막춤을</span>
                     </button>
                     <button
                       onClick={() => {

@@ -11,8 +11,9 @@ interface LayoutProps {
 }
 
 export function Layout({ children, currentPage, onNavigate, currentUser, onLogout }: LayoutProps) {
+  
   return (
-    <div className="min-h-screen bg-gradient-to-br from-pink-50 via-purple-50 to-blue-50">
+    <div className={`min-h-screen pt-8 md:pt-0 bg-gradient-to-br from-pink-50 via-purple-50 to-blue-50`}>
       {/* Main Content */}
       <main className="container mx-auto px-4 py-8">
         {children}

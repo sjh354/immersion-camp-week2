@@ -40,6 +40,7 @@ class User(db.Model):
     post_history = Column(ARRAY(UUID(as_uuid=True))) # Array of Post IDs
     comment_cnt = Column(Integer, default=0)
     comment_history = Column(ARRAY(UUID(as_uuid=True))) # Array of Comment IDs
+    like_cnt = Column(Integer, default=0)  # 좋아요한 포스트 개수
 
     conversations = relationship("Conversation", back_populates="user", cascade="all, delete-orphan")
     posts = relationship("Post", back_populates="user", cascade="all, delete-orphan")

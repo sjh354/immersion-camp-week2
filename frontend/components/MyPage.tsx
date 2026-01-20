@@ -23,6 +23,7 @@ interface Post {
   authorEmail: string;
   originalAuthorEmail: string;
   createdAt: string;
+  likedByMe?: boolean;
 }
 
 interface Comment {
@@ -53,30 +54,38 @@ export function MyPage({ currentUser, setCurrentUser, onNavigate, onDeleteCommen
 
   const [activeTab, setActiveTab] = useState<'posts' | 'comments' | 'likes' | 'settings'>('posts');
   // 원본 값 저장
-  const [originalStyle, setOriginalStyle] = useState<'comfort' | 'funny' | 'obsessed'>(
-    (currentUser?.style as 'comfort' | 'funny' | 'obsessed') || 'comfort'
+  const [originalStyle, setOriginalStyle] = useState<'comfort' | 'funny'>(
+    (currentUser?.style as 'comfort' | 'funny') || 'comfort'
   );
   const [originalIntensity, setOriginalIntensity] = useState<number>(currentUser?.intensity || 1);
   const [originalMbtiType, setOriginalMbtiType] = useState<string>(currentUser?.mbti || 'ISTJ');
 
   // 수정 중 값
-  const [style, setStyle] = useState<'comfort' | 'funny' | 'obsessed'>(originalStyle);
+  const [style, setStyle] = useState<'comfort' | 'funny'>(originalStyle);
   const [intensity, setIntensity] = useState<number>(originalIntensity);
   const [mbtiType, setMbtiType] = useState<string>(originalMbtiType);
   
   const [myPosts, setMyPosts] = useState<Post[]>([]);
   const [myComments, setMyComments] = useState<Comment[]>([]);
+  const [likedPosts, setLikedPosts] = useState<Post[]>([]);
+  const [likeCount, setLikeCount] = useState<number>(0);
 
   useEffect(() => {
     if (currentUser) {
       const fetchMyActivity = async () => {
         try {
-          const [postsResp, commentsResp] = await Promise.all([
+          const [postsResp, commentsResp, likesResp] = await Promise.all([
             fetchWithAuth('/my/posts'),
-            fetchWithAuth('/my/comments')
+            fetchWithAuth('/my/comments'),
+            fetchWithAuth('/my/likes')
           ]);
           if (postsResp.ok) setMyPosts(await postsResp.json());
           if (commentsResp.ok) setMyComments(await commentsResp.json());
+          if (likesResp.ok) {
+            const likesData = await likesResp.json();
+            setLikedPosts(likesData.posts || []);
+            setLikeCount(likesData.count || 0);
+          }
         } catch (err) {
           console.error("Error fetching my activity:", err);
         }
@@ -89,10 +98,10 @@ export function MyPage({ currentUser, setCurrentUser, onNavigate, onDeleteCommen
   // 설정창 진입 시 원본값 동기화
   useEffect(() => {
     if (activeTab === 'settings' && currentUser) {
-      setOriginalStyle((currentUser.style as 'comfort' | 'funny' | 'obsessed') || 'comfort');
+      setOriginalStyle((currentUser.style as 'comfort' | 'funny') || 'comfort');
       setOriginalIntensity(currentUser.intensity || 1);
       setOriginalMbtiType(currentUser.mbti || 'ISTJ');
-      setStyle((currentUser.style as 'comfort' | 'funny' | 'obsessed') || 'comfort');
+      setStyle((currentUser.style as 'comfort' | 'funny') || 'comfort');
       setIntensity(currentUser.intensity || 1);
       setMbtiType(currentUser.mbti || 'ISTJ');
       setNickname(currentUser.name || '');
@@ -176,29 +185,38 @@ export function MyPage({ currentUser, setCurrentUser, onNavigate, onDeleteCommen
           </div>
 
           {/* Stats */}
-          <div className="grid md:grid-cols-3 gap-6 mb-10 min-h-[180px]">
-            <div className="bg-white rounded-2xl shadow-lg p-10 text-center flex flex-col justify-center min-h-[180px]">
-              <div className="bg-purple-100 w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-4">
-                <FileText className="w-10 h-10 text-purple-600" />
+          <div className="grid grid-cols-3 gap-2 mb-5 md:mb-10 min-h-[180px]">
+            <div className="bg-white rounded-2xl shadow-lg p-6 text-center flex flex-col justify-center min-h-[180px]">
+              <div className="bg-purple-100 w-12 h-12 md:w-20 md:h-20 rounded-full flex items-center justify-center mx-auto mb-4">
+                <FileText className="w-6 h-6 md:w-10 md:h-10 text-purple-600" />
               </div>
-              <p className="text-gray-600 text-base mb-2">작성한 포스트</p>
-              <p className="text-4xl font-bold text-purple-600">{currentUser?.postCnt ?? currentUser?.postCnt}</p>
+              <p className="text-gray-600 text-sm md:text-base mb-2">
+                <span className="md:hidden">작성한<br />포스트</span>
+                <span className="hidden md:inline">작성한 포스트</span>
+              </p>
+              <p className="text-2xl md:text-4xl font-bold text-purple-600">{currentUser?.postCnt ?? currentUser?.postCnt}</p>
             </div>
-            <div className="bg-white rounded-2xl shadow-lg p-10 text-center flex flex-col justify-center min-h-[180px]">
-              <div className="bg-pink-100 w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-4">
-                <MessageCircle className="w-10 h-10 text-pink-600" />
+            <div className="bg-white rounded-2xl shadow-lg p-6 text-center flex flex-col justify-center min-h-[180px]">
+              <div className="bg-pink-100 w-12 h-12 md:w-20 md:h-20 rounded-full flex items-center justify-center mx-auto mb-4">
+                <MessageCircle className="w-6 h-6 md:w-10 md:h-10 text-pink-600" />
               </div>
-              <p className="text-gray-600 text-base mb-2">작성한 댓글</p>
-              <p className="text-4xl font-bold text-pink-600">{currentUser?.commentCnt ?? currentUser?.commentCnt}</p>
+              <p className="text-gray-600 text-sm md:text-base mb-2">
+                <span className="md:hidden">작성한<br />댓글</span>
+                <span className="hidden md:inline">작성한 댓글</span>
+              </p>
+              <p className="text-2xl md:text-4xl font-bold text-pink-600">{currentUser?.commentCnt ?? currentUser?.commentCnt}</p>
             </div>
-            <div className="bg-white rounded-2xl shadow-lg p-10 text-center flex flex-col justify-center min-h-[180px]">
-              <div className="bg-pink-100 w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-4">
-                <svg className="w-10 h-10 mx-auto" viewBox="0 0 24 24" fill="none" stroke="#ec4899" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <div className="bg-white rounded-2xl shadow-lg p-6 text-center flex flex-col justify-center min-h-[180px]">
+              <div className="bg-pink-100 w-12 h-12 md:w-20 md:h-20 rounded-full flex items-center justify-center mx-auto mb-4">
+                <svg className="w-6 h-6 md:w-10 md:h-10 mx-auto" viewBox="0 0 24 24" fill="none" stroke="#ec4899" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
                 </svg>
               </div>
-              <p className="text-gray-600 text-base mb-2">좋아요한 포스트</p>
-              <p className="text-4xl font-bold text-pink-600">0</p>
+              <p className="text-gray-600 text-sm md:text-base mb-2">
+                <span className="md:hidden">좋아요한<br />포스트</span>
+                <span className="hidden md:inline">좋아요한 포스트</span>
+              </p>
+              <p className="text-2xl md:text-4xl font-bold text-pink-600">{likeCount}</p>
             </div>
           </div>
 
@@ -206,33 +224,36 @@ export function MyPage({ currentUser, setCurrentUser, onNavigate, onDeleteCommen
           <div className="flex gap-2 mb-6">
             <button
               onClick={() => setActiveTab('posts')}
-              className={`flex-1 py-3 px-4 rounded-xl font-semibold transition-all ${
+              className={`flex-1 py-2 px-3 md:py-3 md:px-4 rounded-xl font-semibold transition-all text-base md:text-lg ${
                 activeTab === 'posts'
                   ? 'bg-gradient-to-r from-pink-500 to-purple-500 text-white shadow-lg'
                   : 'bg-white text-gray-600 hover:bg-gray-100'
               }`}
             >
-              📝 내 포스트
+              <span className="md:hidden">📝 포스트</span>
+              <span className="hidden md:inline">📝 내 포스트</span>
             </button>
             <button
               onClick={() => setActiveTab('comments')}
-              className={`flex-1 py-3 px-4 rounded-xl font-semibold transition-all ${
+              className={`flex-1 py-2 px-3 md:py-3 md:px-4 rounded-xl font-semibold transition-all text-base md:text-lg ${
                 activeTab === 'comments'
                   ? 'bg-gradient-to-r from-pink-500 to-purple-500 text-white shadow-lg'
                   : 'bg-white text-gray-600 hover:bg-gray-100'
               }`}
             >
-              💬 내 댓글
+              <span className="md:hidden">💬 댓글</span>
+              <span className="hidden md:inline">💬 내 댓글</span>
             </button>
             <button
               onClick={() => setActiveTab('likes')}
-              className={`flex-1 py-3 px-4 rounded-xl font-semibold transition-all ${
+              className={`flex-1 py-2 px-3 md:py-3 md:px-4 rounded-xl font-semibold transition-all text-base md:text-lg ${
                 activeTab === 'likes'
                   ? 'bg-gradient-to-r from-pink-500 to-purple-500 text-white shadow-lg'
                   : 'bg-white text-gray-600 hover:bg-gray-100'
               }`}
             >
-              ❤️ 내 좋아요
+              <span className="md:hidden">❤️ 좋아요</span>
+              <span className="hidden md:inline">❤️ 내 좋아요</span>
             </button>
           </div>
         </>
@@ -405,24 +426,54 @@ export function MyPage({ currentUser, setCurrentUser, onNavigate, onDeleteCommen
         </div>
       ) : activeTab === 'likes' ? (
         <div>
-          {/* 좋아요한 포스트가 없을 때 - 내 포스트/댓글과 동일한 박스 크기, 이모티콘 */}
-          <div className="bg-white rounded-2xl shadow-lg p-20 text-center min-h-[240px] flex flex-col items-center justify-center">
-            <svg className="w-20 h-20 mx-auto mb-6" viewBox="0 0 24 24" fill="none" stroke="#d1d5db" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
-            </svg>
-            <p className="text-gray-500 text-lg mb-2">아직 좋아요한 포스트가 없어요</p>
-            <p className="text-gray-400 text-base">마음에 드는 글에 좋아요를 눌러보세요!</p>
-          </div>
-          {/* 좋아요한 포스트가 있을 때는 아래와 같이 카드로 나열 (임시) */}
-          {/*
-          <div className="space-y-4 mt-6">
-            {likedPosts.map((post) => (
-              <div key={post.id} className="bg-white rounded-2xl shadow-lg p-6 hover:shadow-xl transition-shadow">
-                ...카드 내용...
-              </div>
-            ))}
-          </div>
-          */}
+          {likedPosts.length === 0 ? (
+            <div className="bg-white rounded-2xl shadow-lg p-20 text-center min-h-[240px] flex flex-col items-center justify-center">
+              <svg className="w-20 h-20 mx-auto mb-6" viewBox="0 0 24 24" fill="none" stroke="#d1d5db" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
+              </svg>
+              <p className="text-gray-500 text-lg mb-2">아직 좋아요한 포스트가 없어요</p>
+              <p className="text-gray-400 text-base">마음에 드는 글에 좋아요를 눌러보세요!</p>
+            </div>
+          ) : (
+            <div className="space-y-4 mt-6">
+              {likedPosts.map((post) => (
+                <div key={post.id} className="bg-white rounded-2xl shadow-lg p-6 hover:shadow-xl transition-shadow">
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="flex items-center gap-3">
+                      <div className="bg-gradient-to-r from-pink-500 to-purple-500 w-10 h-10 rounded-full flex items-center justify-center text-white font-bold">
+                        {post.author[0]}
+                      </div>
+                      <div>
+                        <p className="font-semibold text-gray-800">{post.author}</p>
+                        <p className="text-xs text-gray-500">{formatDate(post.createdAt)}</p>
+                      </div>
+                    </div>
+                    {/* 좋아요 이모티콘 및 숫자 */}
+                    <div className="flex items-center gap-2">
+                      <span
+                        className={`text-2xl ${post.likedByMe ? 'text-pink-500' : 'text-gray-300'}`}
+                        title={post.likedByMe ? '내가 누른 좋아요' : '좋아요'}
+                      >
+                        ❤️
+                      </span>
+                      <span className="text-lg font-bold text-pink-600">{post.reactions?.[0]?.count ?? 0}</span>
+                    </div>
+                  </div>
+                  <div className="space-y-2 mb-3">
+                    {post.messages.slice(0, 2).map((msg) => (
+                      <div key={msg.id} className={`text-sm p-3 rounded-lg ${msg.sender === 'user' ? 'bg-gradient-to-r from-pink-100 to-purple-100' : 'bg-yellow-50'}`}>
+                        <p className="font-medium text-xs text-gray-600 mb-1">{msg.sender === 'user' ? '나' : '억빠봇'}</p>
+                        <p className="text-gray-800">{truncateText(msg.content, 100)}</p>
+                      </div>
+                    ))}
+                    {post.messages.length > 2 && (
+                      <p className="text-xs text-gray-500 text-center">+{post.messages.length - 2}개 메시지 더보기</p>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       ) : (
         // Settings Tab
@@ -556,7 +607,7 @@ export function MyPage({ currentUser, setCurrentUser, onNavigate, onDeleteCommen
               🎭 MBTI 유형
             </h3>
             <p className="text-sm text-gray-600 mb-4">당신의 성격 유형을 선택하세요</p>
-            <div className="grid grid-cols-8 gap-2">
+            <div className="grid grid-cols-4 md:grid-cols-8 gap-2">
               {[
                 'ISTJ', 'ISFJ', 'INFJ', 'INTJ',
                 'ISTP', 'ISFP', 'INFP', 'INTP',

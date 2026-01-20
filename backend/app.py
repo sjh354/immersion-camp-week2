@@ -129,28 +129,53 @@ def google_auth():
     # Check if user exists
     user = User.query.filter_by(google_sub=google_sub).first()
 
-    if not user:
-        # 신규 유저: 추가 정보 필요
-        extra = data.get('extra', None)
-        if not extra:
-            # 프론트에 추가 정보 입력 요청
+    if user:
+        # 기존 유저라도 age나 gender가 없으면 추가 정보 요구
+        if not user.age or not user.gender:
             return jsonify({"need_extra": True}), 200
-        nickname = extra.get('nickname', name)
-        age = extra.get('age', None)
-        gender = extra.get('gender', None)
-        user = User(
-            email=email,
-            google_sub=google_sub,
-            display_name=nickname,
-            age=age,
-            gender=gender
-        )
-        db.session.add(user)
-        db.session.commit()
-    else:
+        
         # Update last login
         user.last_login_at = datetime.datetime.utcnow()
         db.session.commit()
+        
+        # Generate tokens
+        access_token, refresh_token = create_tokens(user.id)
+        
+        return jsonify({
+            "accessToken": access_token,
+            "refreshToken": refresh_token,
+            "user": {
+                "id": str(user.id),
+                "email": user.email,
+                "name": user.display_name,
+                "mbti": user.setting_mbti,
+                "intensity": user.setting_intensity,
+                "style": user.style,
+                "postCnt": user.post_cnt,
+                "commentCnt": user.comment_cnt,
+                "age": user.age,
+                "gender": user.gender
+            }
+        })
+
+    # 신규 유저
+    extra = data.get('extra', None)
+    if extra is None:
+        return jsonify({"need_extra": True}), 200
+    nickname = extra.get('nickname', name)
+    age = extra.get('age', None)
+    gender = extra.get('gender', None)
+    user = User(
+        email=email,
+        google_sub=google_sub,
+        display_name=nickname,
+        age=age,
+        gender=gender
+    )
+    db.session.add(user)
+    db.session.commit()
+    user.last_login_at = datetime.datetime.utcnow()
+    db.session.commit()
     
     # Generate tokens
     access_token, refresh_token = create_tokens(user.id)
@@ -166,9 +191,12 @@ def google_auth():
             "intensity": user.setting_intensity,
             "style": user.style,
             "postCnt": user.post_cnt,
-            "commentCnt": user.comment_cnt
+            "commentCnt": user.comment_cnt,
+            "age": user.age,
+            "gender": user.gender
         }
     })
+
 
 @app.route('/auth/refresh', methods=['POST'])
 def refresh_token():
@@ -341,6 +369,8 @@ def add_chat_message():
     data = request.get_json() or {}
     content = data.get('content')
     role = data.get('role', 'user')
+
+    useLocalLLM = data.get('useLocalLLM', False)
     
     if not content:
         return jsonify({"error": "Content is missing"}), 400
@@ -361,7 +391,7 @@ def add_chat_message():
     # Trigger chatbot response in background if it's a user message
     if role == 'user':
         # Get user settings for persona
-        thread = threading.Thread(target=trigger_chatbot_response, args=(app.config['SQLALCHEMY_DATABASE_URI'], conversation_id, g.user_id))
+        thread = threading.Thread(target=trigger_chatbot_response, args=(app.config['SQLALCHEMY_DATABASE_URI'], conversation_id, g.user_id, useLocalLLM))
         thread.start()
         
     return jsonify({
@@ -371,7 +401,7 @@ def add_chat_message():
         "timestamp": new_msg.created_at.isoformat() if new_msg.created_at else None
     }), 201
 
-def trigger_chatbot_response(db_url, conversation_id, user_id):
+def trigger_chatbot_response(db_url, conversation_id, user_id, useLocalLLM=False):
     # Use a new app context for the thread
     from models import db, User, Conversation, Message
     from sqlalchemy import create_engine
@@ -407,7 +437,8 @@ def trigger_chatbot_response(db_url, conversation_id, user_id):
                 "temperature": 0.85,
                 "name": user.display_name,
                 "age": user.age,
-                "gender": user.gender
+                "gender": user.gender,
+                "useLocalLLM": useLocalLLM
             }
             resp = requests.post(inference_url, json={"messages": formatted_history, "config": config}, timeout=120)
             if resp.status_code == 200:
@@ -435,7 +466,51 @@ def trigger_chatbot_response(db_url, conversation_id, user_id):
     finally:
         session.close()
 
+# --- Like Utility ---
+def update_user_like_cnt(user_id):
+    from models import Like, User
+    user = User.query.get(user_id)
+    if user:
+        user.like_cnt = Like.query.filter_by(user_id=user_id).count()
+        db.session.commit()
+
 # --- Community ---
+
+# 좋아요 추가
+@app.route('/community/<post_id>/like', methods=['POST'])
+@require_auth
+def like_post(post_id):
+    from models import Like, Post
+    post = Post.query.get(post_id)
+    if not post:
+        return jsonify({"error": "Post not found"}), 404
+    existing = Like.query.filter_by(user_id=g.user_id, post_id=post_id).first()
+    if existing:
+        return jsonify({"message": "Already liked"}), 200
+    new_like = Like(user_id=g.user_id, post_id=post_id)
+    db.session.add(new_like)
+    # hearts +1
+    post.hearts = (post.hearts or 0) + 1
+    db.session.commit()
+    update_user_like_cnt(g.user_id)
+    return jsonify({"message": "Liked"}), 201
+
+# 좋아요 취소
+@app.route('/community/<post_id>/like', methods=['DELETE'])
+@require_auth
+def unlike_post(post_id):
+    from models import Like, Post
+    like = Like.query.filter_by(user_id=g.user_id, post_id=post_id).first()
+    if not like:
+        return jsonify({"error": "Like not found"}), 404
+    post = Post.query.get(like.post_id)
+    db.session.delete(like)
+    # hearts -1 (최소 0)
+    if post and post.hearts and post.hearts > 0:
+        post.hearts -= 1
+    db.session.commit()
+    update_user_like_cnt(g.user_id)
+    return jsonify({"message": "Unliked"}), 200
 
 @app.route('/community', methods=['POST'])
 @require_auth
@@ -499,6 +574,7 @@ def get_community_posts():
     posts = Post.query.order_by(Post.created_at.desc()).all()
 
     results = []
+    from models import Like
     for p in posts:
         author = User.query.get(p.user_id)
 
@@ -515,8 +591,10 @@ def get_community_posts():
                         "timestamp": msg.created_at.isoformat() if msg.created_at else None
                     })
 
-        from models import Like
-        like_count = db.session.query(Like).filter_by(post_id=p.id).count()
+        # 현재 로그인한 사용자가 이 포스트에 좋아요를 눌렀는지 확인
+        liked_by_me = False
+        if hasattr(g, 'user_id') and g.user_id:
+            liked_by_me = Like.query.filter_by(user_id=g.user_id, post_id=p.id).first() is not None
 
         results.append({
             "id": str(p.id),
@@ -527,8 +605,9 @@ def get_community_posts():
             "authorEmail": author.email if author else "",
             "createdAt": p.created_at.isoformat() if p.created_at else None,
             "reactions": [
-                {"type": "empathy", "count": like_count, "users": []}
+                {"type": "empathy", "count": p.hearts, "users": []}
             ],
+            "likedByMe": liked_by_me,
             "comments": [] # Comments are now fetched via /community/comment
         })
 
@@ -541,25 +620,25 @@ def delete_community_post(post_id):
     post = Post.query.get(post_id)
     if not post:
         return jsonify({"error": "Post not found"}), 404
-    
     if str(post.user_id) != str(g.user_id):
         return jsonify({"error": "Unauthorized"}), 403
-        
     # Delete related comments first, and update each comment author's stats (방법 C)
     related_comments = Comment.query.filter_by(post_id=post_id).all()
     for comment in related_comments:
         comment_author = User.query.get(comment.user_id)
         if comment_author:
             comment_author.comment_cnt = max(0, (comment_author.comment_cnt or 1) - 1)
-            # 필요하다면 history에서도 제거
             if comment_author.comment_history and str(comment.id) in [str(cid) for cid in comment_author.comment_history]:
                 comment_author.comment_history = [cid for cid in comment_author.comment_history if str(cid) != str(comment.id)]
         db.session.delete(comment)
-
+    # Delete related likes and update like_cnt for each user
+    from models import Like
+    related_likes = Like.query.filter_by(post_id=post_id).all()
+    affected_user_ids = set()
+    for like in related_likes:
+        affected_user_ids.add(like.user_id)
+        db.session.delete(like)
     db.session.delete(post)
-
-    db.session.delete(post)
-
     # Update user stats
     user = User.query.get(g.user_id)
     if user:
@@ -567,8 +646,10 @@ def delete_community_post(post_id):
         if user.post_history and post_id in [str(pid) for pid in user.post_history]:
             new_history = [pid for pid in user.post_history if str(pid) != str(post_id)]
             user.post_history = new_history
-
     db.session.commit()
+    # 좋아요한 유저들의 like_cnt 갱신
+    for uid in affected_user_ids:
+        update_user_like_cnt(uid)
     return jsonify({"message": "Post deleted"}), 200
 
 @app.route('/community/comment', methods=['POST'])
@@ -676,7 +757,8 @@ def manage_user_profile():
                 "intensity": user.setting_intensity,
                 "style": user.style,
                 "postCnt": user.post_cnt,
-                "commentCnt": user.comment_cnt
+                "commentCnt": user.comment_cnt,
+                "likeCnt": user.like_cnt
             }
         })
     
@@ -820,9 +902,10 @@ def get_my_likes():
             "reactions": [
                 {"type": "empathy", "count": like_count, "users": []}
             ],
+            "likedByMe": True,
             "comments": [] # Comments are now fetched via /community/comment
         })
-    return jsonify(results)
+    return jsonify({"count": len(results), "posts": results})
 
 @app.route('/test')
 def test_connection():

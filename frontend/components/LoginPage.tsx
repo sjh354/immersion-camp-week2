@@ -23,27 +23,23 @@ export function LoginPage({ onLogin }: LoginPageProps) {
 
   const handleGoogleSuccess = async (credentialResponse: any) => {
     try {
-      // 1차: 토큰만 보내서 신규/기존 판별
+      setGoogleCredential(credentialResponse.credential);
       const res = await fetchWithAuth('/auth/google', {
         method: 'POST',
         body: JSON.stringify({ token: credentialResponse.credential }),
       });
       if (!res.ok) throw new Error('로그인에 실패했습니다.');
       const data = await res.json();
-      if (data.need_extra) {
-        // 신규 유저: 추가 정보 입력 폼 띄우기
+      if(data.hasOwnProperty('need_extra') && data.need_extra === true) {
         setNeedExtra(true);
-        setGoogleCredential(credentialResponse.credential);
-        return;
+      } else {
+        setTokens(data.accessToken, data.refreshToken);
+        onLogin({
+          ...data.user,
+          accessToken: data.accessToken,
+          refreshToken: data.refreshToken
+        });
       }
-      // 기존 유저: 바로 로그인 처리
-      setTokens(data.accessToken, data.refreshToken);
-      const completeUser = {
-        ...data.user,
-        accessToken: data.accessToken,
-        refreshToken: data.refreshToken
-      };
-      onLogin(completeUser);
     } catch (err) {
       console.error(err);
       setError('로그인 처리 중 문제가 발생했습니다.');
@@ -74,7 +70,11 @@ export function LoginPage({ onLogin }: LoginPageProps) {
       const completeUser = {
         ...data.user,
         accessToken: data.accessToken,
-        refreshToken: data.refreshToken
+        refreshToken: data.refreshToken,
+        // 입력값을 명시적으로 포함 (백엔드에서 내려주지 않아도 프론트에서 우선 반영)
+        name: nickname,
+        age: age ? Number(age) : null,
+        gender: gender
       };
       onLogin(completeUser);
     } catch (err) {

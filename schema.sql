@@ -20,7 +20,10 @@ CREATE TABLE "USER" (
     google_sub VARCHAR(255) UNIQUE,
     setting_mbti VARCHAR(10),
     setting_intensity INTEGER,
-    style style_enum
+    style style_enum,
+    post_cnt INTEGER DEFAULT 0,
+    comment_cnt INTEGER DEFAULT 0,
+    like_cnt INTEGER DEFAULT 0
 );
 
 CREATE TABLE "CONVERSATION" (

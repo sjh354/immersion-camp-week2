@@ -37,6 +37,7 @@ interface Post {
   createdAt: string;
   reactions: Reaction[];
   comments: Comment[];
+  likedByMe?: boolean;
 }
 
 interface CommunityPageProps {
@@ -46,6 +47,7 @@ interface CommunityPageProps {
   onAddComment: (postId: string, content: string, isAnonymous?: boolean) => void;
   onDeletePost: (postId: string) => void;
   onDeleteComment: (postId: string, commentId: string) => void;
+  likingPostIds?: Set<string>;
 }
 
 const reactionIcons = {
@@ -55,7 +57,7 @@ const reactionIcons = {
   love: { icon: '💕', label: '좋아요', color: 'pink' },
 };
 
-export function CommunityPage({ posts, currentUser, onReactToPost, onAddComment, onDeletePost, onDeleteComment }: CommunityPageProps) {
+export function CommunityPage({ posts, currentUser, onReactToPost, onAddComment, onDeletePost, onDeleteComment, likingPostIds }: CommunityPageProps) {
   const [commentInputs, setCommentInputs] = useState<{ [postId: string]: string }>({});
   // 모든 댓글을 기본적으로 숨김 상태로 초기화
   const initialExpandedState = posts.reduce((acc, post) => {
@@ -181,12 +183,14 @@ export function CommunityPage({ posts, currentUser, onReactToPost, onAddComment,
                 <div className="flex items-center gap-2 mb-4 flex-wrap">
                   {post.reactions.map((reaction) => {
                     const config = reactionIcons[reaction.type];
-                    const hasReacted = currentUser ? reaction.users.includes(currentUser.email) : false;
+                    // likedByMe가 true면 좋아요(공감) 버튼에 강조 표시
+                    const hasReacted = reaction.type === 'empathy' ? post.likedByMe : false;
 
                     return (
                       <button
                         key={reaction.type}
                         onClick={() => onReactToPost(post.id, reaction.type)}
+                        disabled={!!likingPostIds && likingPostIds.has(post.id)}
                         className={`flex items-center gap-1 px-3 py-2 rounded-lg transition-all text-sm font-medium ${
                           hasReacted
                             ? reaction.type === 'empathy'

@@ -263,7 +263,10 @@ export function ChatRoomPage({ chatRoom, onBack, onSendMessage, onDeleteChat, on
                       <Share2 className="w-4 h-4" />
                       <span>커뮤니티에 공유</span>
                     </button>
-                    <button className="w-full px-4 py-2 text-sm text-left hover:bg-gray-100 transition-colors flex items-center gap-2">
+                    <button 
+                      className="w-full px-4 py-2 text-sm text-left hover:bg-gray-100 transition-colors flex items-center gap-2"
+                      onClick={() => setLocalLLM(!localLLM)}
+                    >
                       <input type='checkbox' checked={localLLM} onChange={(e) => setLocalLLM(e.target.checked)}></input>
                       <span>내피땀눈물내마지막춤을</span>
                     </button>

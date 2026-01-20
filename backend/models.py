@@ -7,10 +7,12 @@ import uuid
 from datetime import datetime
 import pytz
 
+
 db = SQLAlchemy()
 
-# Enum type definition
-style_enum = ENUM('comfort', 'funny', 'obsessed', name='style_enum', create_type=True)
+# Enum type definitions
+style_enum = ENUM('comfort', 'funny', name='style_enum', create_type=True)
+gender_enum = ENUM('male', 'female', name='gender_enum', create_type=True)
 
 def get_current_time():
     return datetime.now(pytz.utc)
@@ -22,13 +24,18 @@ class User(db.Model):
     email = Column(String(255), unique=True, nullable=False)
     password_hash = Column(String(255))
     display_name = Column(String(100))
+
     created_at = Column(DateTime(timezone=True), default=get_current_time)
     updated_at = Column(DateTime(timezone=True), default=get_current_time, onupdate=get_current_time)
     last_login_at = Column(DateTime(timezone=True))
     google_sub = Column(String(255), unique=True)
+    # --- 추가 필드 ---
+    age = Column(Integer, default=None)
+    gender = Column(gender_enum, default=None)
+    # --- 기존 필드 ---
     setting_mbti = Column(String(10), default='ISTJ')
     setting_intensity = Column(Integer, default=1) # 1 | 2 | 3 | 4 | 5
-    style = Column(style_enum, default='comfort')
+    style = Column(style_enum, default='comfort') # Only 'comfort' and 'funny' allowed
     post_cnt = Column(Integer, default=0)
     post_history = Column(ARRAY(UUID(as_uuid=True))) # Array of Post IDs
     comment_cnt = Column(Integer, default=0)

@@ -49,7 +49,7 @@ interface CommunityPageProps {
 }
 
 const reactionIcons = {
-  empathy: { icon: '🤝', label: '공감돼요', color: 'blue' },
+  empathy: { icon: '❤️', label: '좋아요', color: 'blue' },
   sad: { icon: '😢', label: '슬퍼요', color: 'gray' },
   laugh: { icon: '😂', label: '웃겨요', color: 'yellow' },
   love: { icon: '💕', label: '좋아요', color: 'pink' },
@@ -115,7 +115,7 @@ export function CommunityPage({ posts, currentUser, onReactToPost, onAddComment,
         </div>
       ) : (
         <div className="space-y-6">
-          {[...posts].reverse().map((post) => {
+          {[...posts].map((post) => {
             const totalReactions = post.reactions.reduce((sum, r) => sum + r.count, 0);
             const isExpanded = expandedPosts[post.id];
 

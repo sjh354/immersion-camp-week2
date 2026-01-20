@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react';
-import { FileText, MessageCircle, Settings } from 'lucide-react';
+import { FileText, MessageCircle, Settings, Heart } from 'lucide-react';
 import { User } from '@/src/app/page';
 import { fetchWithAuth } from '@/utils/apiClient';
 
@@ -38,14 +38,20 @@ interface Comment {
 
 interface MyPageProps {
   currentUser: User | null;
+  setCurrentUser?: (user: User) => void;
   onNavigate: (page: string) => void;
   onDeleteComment: (postId: string, commentId: string) => void;
   onDeletePost: (postId: string) => void;
   onLogout: () => void;
 }
 
-export function MyPage({ currentUser, onNavigate, onDeleteComment, onDeletePost, onLogout }: MyPageProps) {
-  const [activeTab, setActiveTab] = useState<'posts' | 'comments' | 'settings'>('posts');
+export function MyPage({ currentUser, setCurrentUser, onNavigate, onDeleteComment, onDeletePost, onLogout }: MyPageProps) {
+  // 닉네임, 나이, 성별 상태 추가
+  const [nickname, setNickname] = useState(currentUser?.name || '');
+  const [age, setAge] = useState<number | ''>(currentUser?.age ?? '');
+  const [gender, setGender] = useState<'male' | 'female' | ''>(currentUser?.gender ?? '');
+
+  const [activeTab, setActiveTab] = useState<'posts' | 'comments' | 'likes' | 'settings'>('posts');
   // 원본 값 저장
   const [originalStyle, setOriginalStyle] = useState<'comfort' | 'funny' | 'obsessed'>(
     (currentUser?.style as 'comfort' | 'funny' | 'obsessed') || 'comfort'
@@ -89,6 +95,9 @@ export function MyPage({ currentUser, onNavigate, onDeleteComment, onDeletePost,
       setStyle((currentUser.style as 'comfort' | 'funny' | 'obsessed') || 'comfort');
       setIntensity(currentUser.intensity || 1);
       setMbtiType(currentUser.mbti || 'ISTJ');
+      setNickname(currentUser.name || '');
+      setAge(currentUser.age ?? '');
+      setGender(currentUser.gender ?? '');
     }
   }, [activeTab, currentUser]);
   
@@ -140,46 +149,7 @@ export function MyPage({ currentUser, onNavigate, onDeleteComment, onDeletePost,
             </button>
             <span className="text-xl font-bold text-gray-800">설정</span>
           </div>
-          {/* 닉네임 변경 */}
-          <div className="bg-white rounded-2xl shadow-lg p-6 mb-6 max-w-md mx-auto">
-            <h3 className="font-bold text-gray-800 mb-2">닉네임 변경</h3>
-            <form
-              onSubmit={async (e) => {
-                e.preventDefault();
-                const form = e.target as HTMLFormElement;
-                const input = form.elements.namedItem('nickname') as HTMLInputElement;
-                const newName = input.value.trim();
-                if (!newName) return;
-                const res = await fetchWithAuth('/my', {
-                  method: 'PATCH',
-                  body: JSON.stringify({ name: newName })
-                });
-                if (res.ok) {
-                  alert('닉네임이 변경되었습니다!');
-                  if (currentUser) currentUser.name = newName;
-                  setActiveTab('posts');
-                } else {
-                  alert('닉네임 변경에 실패했습니다.');
-                }
-              }}
-              className="flex gap-2 items-center"
-            >
-              <input
-                type="text"
-                name="nickname"
-                defaultValue={currentUser?.name || ''}
-                className="border rounded-lg px-3 py-2 flex-1 focus:outline-none focus:ring-2 focus:ring-pink-400"
-                placeholder="새 닉네임 입력"
-                maxLength={20}
-              />
-              <button
-                type="submit"
-                className="px-4 py-2 rounded-lg bg-gradient-to-r from-pink-500 to-purple-500 text-white font-semibold hover:from-pink-600 hover:to-purple-600 transition-all"
-              >
-                저장
-              </button>
-            </form>
-          </div>
+          {/* ...existing code... */}
         </>
       )}
       {activeTab !== 'settings' && (
@@ -206,21 +176,29 @@ export function MyPage({ currentUser, onNavigate, onDeleteComment, onDeletePost,
           </div>
 
           {/* Stats */}
-          <div className="grid md:grid-cols-2 gap-4 mb-6">
-            <div className="bg-white rounded-2xl shadow-lg p-6 text-center">
-              <div className="bg-purple-100 w-12 h-12 rounded-full flex items-center justify-center mx-auto mb-3">
-                <FileText className="w-6 h-6 text-purple-600" />
+          <div className="grid md:grid-cols-3 gap-6 mb-10 min-h-[180px]">
+            <div className="bg-white rounded-2xl shadow-lg p-10 text-center flex flex-col justify-center min-h-[180px]">
+              <div className="bg-purple-100 w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-4">
+                <FileText className="w-10 h-10 text-purple-600" />
               </div>
-              <p className="text-gray-600 text-sm mb-1">작성한 포스트</p>
-              <p className="text-3xl font-bold text-purple-600">{currentUser?.postCnt ?? currentUser?.postCnt}</p>
+              <p className="text-gray-600 text-base mb-2">작성한 포스트</p>
+              <p className="text-4xl font-bold text-purple-600">{currentUser?.postCnt ?? currentUser?.postCnt}</p>
             </div>
-
-            <div className="bg-white rounded-2xl shadow-lg p-6 text-center">
-              <div className="bg-pink-100 w-12 h-12 rounded-full flex items-center justify-center mx-auto mb-3">
-                <MessageCircle className="w-6 h-6 text-pink-600" />
+            <div className="bg-white rounded-2xl shadow-lg p-10 text-center flex flex-col justify-center min-h-[180px]">
+              <div className="bg-pink-100 w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-4">
+                <MessageCircle className="w-10 h-10 text-pink-600" />
               </div>
-              <p className="text-gray-600 text-sm mb-1">작성한 댓글</p>
-              <p className="text-3xl font-bold text-pink-600">{currentUser?.commentCnt ?? currentUser?.commentCnt}</p>
+              <p className="text-gray-600 text-base mb-2">작성한 댓글</p>
+              <p className="text-4xl font-bold text-pink-600">{currentUser?.commentCnt ?? currentUser?.commentCnt}</p>
+            </div>
+            <div className="bg-white rounded-2xl shadow-lg p-10 text-center flex flex-col justify-center min-h-[180px]">
+              <div className="bg-pink-100 w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-4">
+                <svg className="w-10 h-10 mx-auto" viewBox="0 0 24 24" fill="none" stroke="#ec4899" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
+                </svg>
+              </div>
+              <p className="text-gray-600 text-base mb-2">좋아요한 포스트</p>
+              <p className="text-4xl font-bold text-pink-600">0</p>
             </div>
           </div>
 
@@ -246,6 +224,16 @@ export function MyPage({ currentUser, onNavigate, onDeleteComment, onDeletePost,
             >
               💬 내 댓글
             </button>
+            <button
+              onClick={() => setActiveTab('likes')}
+              className={`flex-1 py-3 px-4 rounded-xl font-semibold transition-all ${
+                activeTab === 'likes'
+                  ? 'bg-gradient-to-r from-pink-500 to-purple-500 text-white shadow-lg'
+                  : 'bg-white text-gray-600 hover:bg-gray-100'
+              }`}
+            >
+              ❤️ 내 좋아요
+            </button>
           </div>
         </>
       )}
@@ -254,10 +242,10 @@ export function MyPage({ currentUser, onNavigate, onDeleteComment, onDeletePost,
       {activeTab === 'posts' ? (
         <div>
           {sortedPosts.length === 0 ? (
-            <div className="bg-white rounded-2xl shadow-lg p-12 text-center">
-              <FileText className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-              <p className="text-gray-500">아직 작성한 포스트가 없어요</p>
-              <p className="text-gray-400 text-sm mt-2">대화를 커뮤니티에 공유해보세요!</p>
+            <div className="bg-white rounded-2xl shadow-lg p-20 text-center min-h-[240px] flex flex-col items-center justify-center">
+              <FileText className="w-20 h-20 text-gray-300 mx-auto mb-6" />
+              <p className="text-gray-500 text-lg mb-2">아직 작성한 포스트가 없어요</p>
+              <p className="text-gray-400 text-base">대화를 커뮤니티에 공유해보세요!</p>
             </div>
           ) : (
             <div className="space-y-4">
@@ -318,6 +306,29 @@ export function MyPage({ currentUser, onNavigate, onDeleteComment, onDeletePost,
                       if (confirm('이 포스트를 삭제하시겠어요?')) {
                         await onDeletePost(post.id);
                         setMyPosts(prev => prev.filter(p => p.id !== post.id));
+                        // 유저 정보 갱신
+                        if (setCurrentUser) {
+                          try {
+                            const res = await fetchWithAuth('/my');
+                            if (res.ok) {
+                              const data = await res.json();
+                              if (data && data.user) {
+                                // localStorage user 정보도 갱신
+                                const userStr = localStorage.getItem('user');
+                                if (userStr) {
+                                  const userObj = JSON.parse(userStr);
+                                  const newUser = { ...userObj, ...data.user };
+                                  localStorage.setItem('user', JSON.stringify(newUser));
+                                  setCurrentUser(newUser);
+                                } else {
+                                  setCurrentUser(data.user);
+                                }
+                              }
+                            }
+                          } catch (err) {
+                            console.error('유저 정보 갱신 실패:', err);
+                          }
+                        }
                       }
                     }}
                     className="text-gray-400 hover:text-red-600 transition-colors text-sm"
@@ -332,10 +343,10 @@ export function MyPage({ currentUser, onNavigate, onDeleteComment, onDeletePost,
       ) : activeTab === 'comments' ? (
         <div>
           {sortedComments.length === 0 ? (
-            <div className="bg-white rounded-2xl shadow-lg p-12 text-center">
-              <MessageCircle className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-              <p className="text-gray-500">아직 작성한 댓글이 없어요</p>
-              <p className="text-gray-400 text-sm mt-2">커뮤니티에서 소통해보세요!</p>
+            <div className="bg-white rounded-2xl shadow-lg p-20 text-center min-h-[240px] flex flex-col items-center justify-center">
+              <MessageCircle className="w-20 h-20 text-gray-300 mx-auto mb-6" />
+              <p className="text-gray-500 text-lg mb-2">아직 작성한 댓글이 없어요</p>
+              <p className="text-gray-400 text-base">커뮤니티에서 소통해보세요!</p>
             </div>
           ) : (
             <div className="space-y-4">
@@ -392,16 +403,90 @@ export function MyPage({ currentUser, onNavigate, onDeleteComment, onDeletePost,
             </div>
           )}
         </div>
+      ) : activeTab === 'likes' ? (
+        <div>
+          {/* 좋아요한 포스트가 없을 때 - 내 포스트/댓글과 동일한 박스 크기, 이모티콘 */}
+          <div className="bg-white rounded-2xl shadow-lg p-20 text-center min-h-[240px] flex flex-col items-center justify-center">
+            <svg className="w-20 h-20 mx-auto mb-6" viewBox="0 0 24 24" fill="none" stroke="#d1d5db" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
+            </svg>
+            <p className="text-gray-500 text-lg mb-2">아직 좋아요한 포스트가 없어요</p>
+            <p className="text-gray-400 text-base">마음에 드는 글에 좋아요를 눌러보세요!</p>
+          </div>
+          {/* 좋아요한 포스트가 있을 때는 아래와 같이 카드로 나열 (임시) */}
+          {/*
+          <div className="space-y-4 mt-6">
+            {likedPosts.map((post) => (
+              <div key={post.id} className="bg-white rounded-2xl shadow-lg p-6 hover:shadow-xl transition-shadow">
+                ...카드 내용...
+              </div>
+            ))}
+          </div>
+          */}
+        </div>
       ) : (
         // Settings Tab
         <div className="space-y-6">
+          {/* 기본 정보 */}
+          <div className="bg-white rounded-2xl shadow-lg p-6 space-y-4">
+            <h3 className="font-bold text-gray-800 mb-4 flex items-center gap-2">👤 기본 정보</h3>
+            <div className="flex flex-row gap-3 items-end">
+              {/* 닉네임 */}
+              <div className="flex-[2] min-w-0">
+                <label className="block text-sm font-medium text-gray-700 mb-1">닉네임</label>
+                <input
+                  type="text"
+                  name="nickname"
+                  value={nickname}
+                  onChange={e => setNickname(e.target.value)}
+                  className="border rounded-lg px-3 py-2 w-full focus:outline-none focus:ring-2 focus:ring-pink-400"
+                  placeholder="이름 입력"
+                  maxLength={20}
+                />
+              </div>
+              {/* 나이 */}
+              <div className="flex-1 min-w-0 ml-2">
+                <label className="block text-sm font-medium text-gray-700 mb-1">나이</label>
+                <input
+                  type="number"
+                  name="age"
+                  value={age}
+                  onChange={e => setAge(e.target.value === '' ? '' : Number(e.target.value))}
+                  className="border rounded-lg px-3 py-2 w-full focus:outline-none focus:ring-2 focus:ring-pink-400"
+                  placeholder="나이"
+                  min={0}
+                  max={120}
+                />
+              </div>
+              {/* 성별 */}
+              <div className="flex-[1.5] min-w-0 ml-2">
+                <label className="block text-sm font-medium text-gray-700 mb-1">성별</label>
+                <div className="flex flex-row w-full">
+                  <button
+                    type="button"
+                    onClick={() => setGender('male')}
+                    className={`flex-1 py-2 rounded-l-lg border border-gray-300 text-center font-medium transition-all ${gender === 'male' ? 'bg-gradient-to-r from-blue-400 to-blue-500 text-white' : 'bg-white text-gray-700 hover:bg-blue-50'}`}
+                  >
+                    남
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setGender('female')}
+                    className={`flex-1 py-2 rounded-r-lg border-t border-b border-r border-gray-300 text-center font-medium transition-all -ml-px ${gender === 'female' ? 'bg-gradient-to-r from-pink-400 to-pink-500 text-white' : 'bg-white text-gray-700 hover:bg-pink-50'}`}
+                  >
+                    여
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
           {/* 억빠 스타일 설정 */}
           <div className="bg-white rounded-2xl shadow-lg p-6">
             <h3 className="font-bold text-gray-800 mb-4 flex items-center gap-2">
               🎨 억빠 스타일
             </h3>
             <p className="text-sm text-gray-600 mb-4">채팅에서 사용할 기본 스타일을 선택하세요</p>
-            <div className="grid grid-cols-3 gap-3">
+            <div className="grid grid-cols-2 gap-3">
               <button
                 onClick={() => setStyle('comfort')}
                 className={`py-3 px-4 rounded-xl font-medium transition-all ${
@@ -421,16 +506,6 @@ export function MyPage({ currentUser, onNavigate, onDeleteComment, onDeletePost,
                 }`}
               >
                 🤡 웃김형
-              </button>
-              <button
-                onClick={() => setStyle('obsessed')}
-                className={`py-3 px-4 rounded-xl font-medium transition-all ${
-                  style === 'obsessed'
-                    ? 'bg-gradient-to-r from-red-500 to-red-600 text-white shadow-lg'
-                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                }`}
-              >
-                🔥 과몰입형
               </button>
             </div>
           </div>
@@ -507,16 +582,27 @@ export function MyPage({ currentUser, onNavigate, onDeleteComment, onDeletePost,
           <div className="flex gap-4 pt-4">
             <button
               onClick={async () => {
-                // 저장: PATCH 여러 값
+                // 저장: PATCH 여러 값 (닉네임 포함)
+                console.log('PATCH /my', { name: nickname, style, intensity, mbti: mbtiType });
                 const patchRes = await fetchWithAuth('/my', {
                   method: 'PATCH',
-                  body: JSON.stringify({ style, intensity, mbti: mbtiType })
+                  body: JSON.stringify({
+                    name: nickname,
+                    age: age === '' ? null : age,
+                    gender: gender || null,
+                    style,
+                    intensity,
+                    mbti: mbtiType
+                  })
                 });
+                console.log('PATCH /my response', patchRes);
                 if (patchRes.ok) {
                   // 저장 후 유저 정보 갱신
                   const res = await fetchWithAuth('/my');
+                  console.log('GET /my after PATCH', res);
                   if (res.ok) {
                     const data = await res.json();
+                    console.log('GET /my data', data);
                     if (data && data.user) {
                       // localStorage user 정보도 갱신
                       const userStr = localStorage.getItem('user');
@@ -524,6 +610,8 @@ export function MyPage({ currentUser, onNavigate, onDeleteComment, onDeletePost,
                         const userObj = JSON.parse(userStr);
                         const newUser = { ...userObj, ...data.user };
                         localStorage.setItem('user', JSON.stringify(newUser));
+                        console.log('localStorage user updated', newUser);
+                        if (setCurrentUser) setCurrentUser(newUser);
                       }
                     }
                   }

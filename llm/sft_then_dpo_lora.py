@@ -77,8 +77,8 @@ def main():
     # 1. 설정
     mode = "comfort"
     base_model_path = "LGAI-EXAONE/EXAONE-3.0-7.8B-Instruct"
-    traindata_dir = "data/sft3-10000.jsonl"
-    traindata_dir_dpo = "data/dpo2-10000.jsonl"
+    traindata_dir = "data/sft5.jsonl"
+    traindata_dir_dpo = "data/dpo3.jsonl"
     
     if mode == "comfort":
         output_dir = "./lora_adapter_comfort"
@@ -195,7 +195,7 @@ def main():
         per_device_train_batch_size=1,
         gradient_accumulation_steps=8,
         learning_rate=5e-5, 
-        num_train_epochs=5,
+        num_train_epochs=90,
         max_length=1024,
         bf16=True,
         logging_steps=10,
@@ -230,7 +230,7 @@ def main():
         peft_config=None, 
     )
 
-    dpo_trainer.train(resume_from_checkpoint=False)
+    dpo_trainer.train(resume_from_checkpoint=True)
     print("[Phase 2] DPO Complete.")
 
     # 6. 최종 저장

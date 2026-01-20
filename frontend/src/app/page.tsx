@@ -10,10 +10,13 @@ import { MyPage } from "@/components/MyPage";
 import { MessageCircleHeart } from "lucide-react";
 import { fetchWithAuth, clearTokens, updateUser } from "@/utils/apiClient";
 import { ChatDetailPage } from "@/components/ChatDetailPage";
+// import { PushEnableButton } from "@/components/PushEnableButton";
 
 export interface User {
   name: string;
   email: string;
+  age?: number;
+  gender?: 'male' | 'female';
   mbti?: string;
   intensity?: number;
   style?: string;
@@ -504,6 +507,7 @@ const myComments = user
       onNavigate={navigate}
       onLogout={handleLogout}
     >
+      {/* <PushEnableButton /> */}
       {currentPage === "chat-list" && (
         <Suspense fallback={
           <div className="max-w-4xl mx-auto pb-24">
@@ -550,6 +554,7 @@ const myComments = user
             {currentPage === "mypage" && (
         <MyPage
           currentUser={user}
+          setCurrentUser={setUser}
           onNavigate={navigate}
           onDeleteComment={handleDeleteComment}
           onDeletePost={handleDeletePost}

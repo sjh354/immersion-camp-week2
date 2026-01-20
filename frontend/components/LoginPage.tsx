@@ -12,39 +12,74 @@ interface LoginPageProps {
 
 export function LoginPage({ onLogin }: LoginPageProps) {
   const [error, setError] = useState('');
+  const [nickname, setNickname] = useState('');
+  const [age, setAge] = useState('');
+  const [gender, setGender] = useState<'male' | 'female' | ''>('');
+  const [needExtra, setNeedExtra] = useState(false);
+  const [googleCredential, setGoogleCredential] = useState<string | null>(null);
   
   // Use environment variable for Client ID
   const GOOGLE_CLIENT_ID = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || "YOUR_GOOGLE_CLIENT_ID";
 
   const handleGoogleSuccess = async (credentialResponse: any) => {
     try {
+      // 1차: 토큰만 보내서 신규/기존 판별
       const res = await fetchWithAuth('/auth/google', {
         method: 'POST',
         body: JSON.stringify({ token: credentialResponse.credential }),
       });
-
-      if (!res.ok) {
-        throw new Error('로그인에 실패했습니다.');
-      }
-
+      if (!res.ok) throw new Error('로그인에 실패했습니다.');
       const data = await res.json();
-      
-      // Save tokens
+      if (data.need_extra) {
+        // 신규 유저: 추가 정보 입력 폼 띄우기
+        setNeedExtra(true);
+        setGoogleCredential(credentialResponse.credential);
+        return;
+      }
+      // 기존 유저: 바로 로그인 처리
       setTokens(data.accessToken, data.refreshToken);
-      
-      // Merge tokens into user object
       const completeUser = {
         ...data.user,
         accessToken: data.accessToken,
         refreshToken: data.refreshToken
       };
-      
-      // Update parent state
       onLogin(completeUser);
-      
     } catch (err) {
       console.error(err);
       setError('로그인 처리 중 문제가 발생했습니다.');
+    }
+  };
+
+  // 신규 유저 추가 정보 제출
+  const handleExtraSubmit = async () => {
+    try {
+      if (!nickname || !age || !gender || !googleCredential) {
+        setError('닉네임, 나이, 성별을 모두 입력해주세요.');
+        return;
+      }
+      const res = await fetchWithAuth('/auth/google', {
+        method: 'POST',
+        body: JSON.stringify({
+          token: googleCredential,
+          extra: {
+            nickname,
+            age: age ? Number(age) : null,
+            gender
+          }
+        }),
+      });
+      if (!res.ok) throw new Error('회원가입에 실패했습니다.');
+      const data = await res.json();
+      setTokens(data.accessToken, data.refreshToken);
+      const completeUser = {
+        ...data.user,
+        accessToken: data.accessToken,
+        refreshToken: data.refreshToken
+      };
+      onLogin(completeUser);
+    } catch (err) {
+      console.error(err);
+      setError('회원가입 처리 중 문제가 발생했습니다.');
     }
   };
 
@@ -70,17 +105,71 @@ export function LoginPage({ onLogin }: LoginPageProps) {
           {/* Login Section */}
           <div className="bg-white rounded-2xl shadow-xl p-8 flex flex-col items-center justify-center min-h-[200px]">
             <h2 className="text-xl font-semibold mb-6 text-gray-700">간편하게 시작하기</h2>
-            
-            <div className="w-full flex justify-center">
-              <GoogleLogin
-                onSuccess={handleGoogleSuccess}
-                onError={() => setError('Google 로그인에 실패했습니다.')}
-                useOneTap
-                shape="pill"
-                size="large"
-                width="100%"
-              />
-            </div>
+
+            {/* 신규 유저일 때만 추가 정보 입력 */}
+            {needExtra ? (
+              <>
+                <div className="w-full mb-4">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">닉네임</label>
+                  <input
+                    type="text"
+                    value={nickname}
+                    onChange={e => setNickname(e.target.value)}
+                    className="border rounded-lg px-3 py-2 w-full focus:outline-none focus:ring-2 focus:ring-pink-400"
+                    placeholder="닉네임 입력"
+                    maxLength={20}
+                  />
+                </div>
+                <div className="w-full mb-4">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">나이</label>
+                  <input
+                    type="number"
+                    value={age}
+                    onChange={e => setAge(e.target.value)}
+                    className="border rounded-lg px-3 py-2 w-full focus:outline-none focus:ring-2 focus:ring-pink-400"
+                    placeholder="나이 입력"
+                    min={0}
+                    max={120}
+                  />
+                </div>
+                <div className="w-full mb-6">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">성별</label>
+                  <div className="flex flex-row w-full">
+                    <button
+                      type="button"
+                      onClick={() => setGender('male')}
+                      className={`flex-1 py-2 rounded-l-lg border border-gray-300 text-center font-medium transition-all ${gender === 'male' ? 'bg-gradient-to-r from-blue-400 to-blue-500 text-white' : 'bg-white text-gray-700 hover:bg-blue-50'}`}
+                    >
+                      남
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setGender('female')}
+                      className={`flex-1 py-2 rounded-r-lg border-t border-b border-r border-gray-300 text-center font-medium transition-all -ml-px ${gender === 'female' ? 'bg-gradient-to-r from-pink-400 to-pink-500 text-white' : 'bg-white text-gray-700 hover:bg-pink-50'}`}
+                    >
+                      여
+                    </button>
+                  </div>
+                </div>
+                <button
+                  className="w-full py-3 px-6 rounded-xl font-bold text-white bg-gradient-to-r from-pink-500 to-purple-500 hover:from-pink-600 hover:to-purple-600 transition-all shadow-sm mb-2"
+                  onClick={handleExtraSubmit}
+                >
+                  회원가입 완료
+                </button>
+              </>
+            ) : (
+              <div className="w-full flex justify-center">
+                <GoogleLogin
+                  onSuccess={handleGoogleSuccess}
+                  onError={() => setError('Google 로그인에 실패했습니다.')}
+                  useOneTap
+                  shape="pill"
+                  size="large"
+                  width="100%"
+                />
+              </div>
+            )}
 
             {error && (
               <div className="mt-4 bg-red-50 border-2 border-red-200 rounded-lg p-3 w-full text-center">

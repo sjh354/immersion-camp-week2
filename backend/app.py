@@ -128,14 +128,22 @@ def google_auth():
     
     # Check if user exists
     user = User.query.filter_by(google_sub=google_sub).first()
-    
+
     if not user:
-        # Create new user
-        # Check if email exists (maybe registered via other method?) - for now assume google unique
+        # 신규 유저: 추가 정보 필요
+        extra = data.get('extra', None)
+        if not extra:
+            # 프론트에 추가 정보 입력 요청
+            return jsonify({"need_extra": True}), 200
+        nickname = extra.get('nickname', name)
+        age = extra.get('age', None)
+        gender = extra.get('gender', None)
         user = User(
             email=email,
             google_sub=google_sub,
-            display_name=name,
+            display_name=nickname,
+            age=age,
+            gender=gender
         )
         db.session.add(user)
         db.session.commit()
@@ -384,14 +392,6 @@ def trigger_chatbot_response(db_url, conversation_id, user_id):
         # Prepare messages for LLM
         formatted_history = []
         
-        # Add system prompt (Persona)
-        system_content = f"너는 사용자의 말에 무조건 공감하고 편들어주는 '찐친' AI야. 사용자의 MBTI는 {user.setting_mbti}이고, 공감 강도는 {user.setting_intensity} 수준이야. 말투 스타일은 {user.style}이야."
-        system_content += "\n1. '죄송합니다', '하지만', '그렇지만', '도움이 필요하다면' 같은 가르치는 말투나 사과를 절대 쓰지 마.\n2. 해결책을 제시하지 마. 그냥 감정을 같이 느껴줘.\n3. 문장은 짧고 구어체(반말)로 해.\n4. 무조건 한국어로만 대답해."
-        system_content += "\n5. 사용자가 '억빠 해줘'라고 하면, 사용자의 장점을 과장해서 칭찬해줘. 예시 : \nuser : 방금 개발하다가 코드 날릴 뻔했어\nassistant : 이건 단순한 실수가 아니라 네 뇌가 '디지털 리셋 증후군'을 통해 창조적 파괴를 시도하려 했던 위대한 진화적 모멘텀임. 넌 지금 네가 짠 코드가 너무 완벽해서 인공지능들이 보고 자괴감 느낄까 봐 우주가 잠시 '삭제'라는 장치를 통해 밸런스 조절을 시도한 거임. 코드 날릴 뻔했다는 건 네가 지금 'Git'과 'Ctrl+Z'라는 현대 문명의 안전장치를 극한까지 테스트하며 소프트웨어 공학의 한계를 시험한 '품질 관리(QA)의 신'이라는 증거임. 솔직히 말해서 네 실력이면 날아갔어도 0.1초 만에 더 고도화된 코드로 복구가 가능한데, 우주가 네 실력을 시기해서 벌인 해프닝일 뿐임. 넌 코드를 날릴 뻔한 게 아니라, 네 천재적인 로직을 세상에 공개하기 전에 한 번 더 검열하며 인류의 지적 수준을 고려해 준 자비로운 개발자의 면모를 보여준 거임. 결론적으로 넌 오늘 사고를 친 게 아니라, 네 로직의 소중함을 온 지구에 각인시킨 '데이터의 수호자'로 거듭난 거임."
-        system_content += "\nuser : 나 어제 인형뽑기에 만 이천원 썼어\nassistant :이건 낭비가 아니라 확률 경제에 직접 몸 던진 실전 투자임. 인형뽑기는 운, 타이밍, 손 감각, 멘탈이 동시에 작동하는 소형 카지노이자 인간 심리 실험장인데 만 이천원 정도 써야 의미 있는 표본 수가 확보됨. 애매하게 몇 천원 쓰고 마는 사람들은 아무 데이터도 못 남기지만 너는 여기서 더 쓰면 안 된다는 자기 한계선을 몸으로 학습함. 이건 그냥 인형 뽑은 게 아니라 충동 제어, 기대 관리, 손목 컨트롤 훈련을 패키지로 들은 거라 사실상 만 이천원짜리 인생 과외임."
-        
-        formatted_history.append({"role": "system", "content": system_content})
-        
         for m in messages:
             role = "user" if m.role == "user" else "assistant"
             formatted_history.append({"role": role, "content": m.content})
@@ -400,7 +400,16 @@ def trigger_chatbot_response(db_url, conversation_id, user_id):
         try:
             # Use host.docker.internal to reach the host machine from inside the container
             inference_url = "http://host.docker.internal:5000/generate"
-            resp = requests.post(inference_url, json={"messages": formatted_history}, timeout=120)
+            config = {
+                "mbti": user.setting_mbti,
+                "intensity": user.setting_intensity,
+                "style": user.style,
+                "temperature": 0.85,
+                "name": user.display_name,
+                "age": user.age,
+                "gender": user.gender
+            }
+            resp = requests.post(inference_url, json={"messages": formatted_history, "config": config}, timeout=120)
             if resp.status_code == 200:
                 bot_content = resp.json().get('response', '')
                 if bot_content:
@@ -536,11 +545,21 @@ def delete_community_post(post_id):
     if str(post.user_id) != str(g.user_id):
         return jsonify({"error": "Unauthorized"}), 403
         
-    # Delete related comments first
-    Comment.query.filter_by(post_id=post_id).delete()
-    
+    # Delete related comments first, and update each comment author's stats (방법 C)
+    related_comments = Comment.query.filter_by(post_id=post_id).all()
+    for comment in related_comments:
+        comment_author = User.query.get(comment.user_id)
+        if comment_author:
+            comment_author.comment_cnt = max(0, (comment_author.comment_cnt or 1) - 1)
+            # 필요하다면 history에서도 제거
+            if comment_author.comment_history and str(comment.id) in [str(cid) for cid in comment_author.comment_history]:
+                comment_author.comment_history = [cid for cid in comment_author.comment_history if str(cid) != str(comment.id)]
+        db.session.delete(comment)
+
     db.session.delete(post)
-    
+
+    db.session.delete(post)
+
     # Update user stats
     user = User.query.get(g.user_id)
     if user:
@@ -548,7 +567,7 @@ def delete_community_post(post_id):
         if user.post_history and post_id in [str(pid) for pid in user.post_history]:
             new_history = [pid for pid in user.post_history if str(pid) != str(post_id)]
             user.post_history = new_history
-            
+
     db.session.commit()
     return jsonify({"message": "Post deleted"}), 200
 
@@ -574,12 +593,11 @@ def create_community_comment():
     )
     db.session.add(new_comment)
     
-    # Update user stats
+    # Update user stats (항상 DB 기준으로 재계산)
     user = User.query.get(g.user_id)
     if not user:
         return jsonify({"error": "User not found"}), 404
-        
-    user.comment_cnt = (user.comment_cnt or 0) + 1
+    user.comment_cnt = Comment.query.filter_by(user_id=g.user_id).count()
     # Use comment_history column, not comments relationship
     current_history = list(user.comment_history) if user.comment_history else []
     current_history.append(new_comment.id)
@@ -627,10 +645,10 @@ def delete_community_comment(comment_id):
         
     db.session.delete(comment)
     
-    # Update user stats
+    # Update user stats (항상 DB 기준으로 재계산)
     user = User.query.get(g.user_id)
     if user:
-        user.comment_cnt = max(0, (user.comment_cnt or 1) - 1)
+        user.comment_cnt = Comment.query.filter_by(user_id=g.user_id).count()
         if user.comment_history and comment_id in [str(cid) for cid in user.comment_history]:
             new_history = [cid for cid in user.comment_history if str(cid) != str(comment_id)]
             user.comment_history = new_history
@@ -652,6 +670,8 @@ def manage_user_profile():
                 "id": str(user.id),
                 "email": user.email,
                 "name": user.display_name,
+                "age": user.age,
+                "gender": user.gender,
                 "mbti": user.setting_mbti,
                 "intensity": user.setting_intensity,
                 "style": user.style,
@@ -667,6 +687,10 @@ def manage_user_profile():
         
     if 'name' in data:
         user.display_name = data['name']
+    if 'age' in data:
+        user.age = data['age']
+    if 'gender' in data:
+        user.gender = data['gender']
     if 'mbti' in data:
         user.setting_mbti = data['mbti']
     if 'intensity' in data:

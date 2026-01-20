@@ -58,6 +58,7 @@ export function ChatRoomPage({ chatRoom, onBack, onSendMessage, onDeleteChat, on
     // 메시지가 추가되고, 마지막 메시지가 봇 메시지면 생성 완료
     if (currentCount > prevCount && chatRoom.messages[currentCount - 1]?.sender === 'bot') {
       setIsGenerating(false);
+      // TODO : 알람 푸쉬
     }
     
     prevMessageCountRef.current = currentCount;
@@ -157,18 +158,47 @@ export function ChatRoomPage({ chatRoom, onBack, onSendMessage, onDeleteChat, on
               <ArrowLeft className="w-6 h-6" />
             </button>
             <div className="flex-1 min-w-0">
-              {changeTitle ? (<input type="text" value={newTitle} onChange={async (e) => {
-                setNewTitle(e.target.value);
-              }} onBlur={async () => {
-                await onUpdateTitle(chatRoom.id, newTitle);
-                setChangeTitle(false);
-              }} onKeyDown={async (e) => {
-                if (e.key === "Enter") {
-                  await onUpdateTitle(chatRoom.id, newTitle);
-                  setChangeTitle(false);
-                }
-              }}
-            />) : (<h2 className="font-bold text-gray-800 truncate" onClick={() => setChangeTitle(true)}>{chatRoom.title}</h2>)}
+              {changeTitle ? (
+                <div className="flex items-center gap-1 w-full">
+                  <input
+                    type="text"
+                    value={newTitle}
+                    autoFocus
+                    placeholder="채팅방 이름을 입력하세요"
+                    className="border-b border-pink-400 bg-pink-50 px-2 py-1 rounded font-bold text-gray-800 focus:outline-none focus:border-purple-500 transition-all w-full max-w-xs"
+                    onChange={e => setNewTitle(e.target.value)}
+                  />
+                  <button
+                    className="ml-1 p-1 rounded bg-pink-500 text-white hover:bg-pink-600 transition-all flex items-center justify-center"
+                    title="이름 저장"
+                    onClick={async () => {
+                      await onUpdateTitle(chatRoom.id, newTitle);
+                      setChangeTitle(false);
+                    }}
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
+                  </button>
+                  <button
+                    className="ml-1 p-1 rounded bg-gray-200 text-gray-600 hover:bg-gray-300 transition-all flex items-center justify-center"
+                    title="취소"
+                    onClick={() => {
+                      setNewTitle(chatRoom.title);
+                      setChangeTitle(false);
+                    }}
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+                  </button>
+                </div>
+              ) : (
+                <div className="flex items-center gap-1">
+                  <h2 className="font-bold text-gray-800 truncate">{chatRoom.title}</h2>
+                  <button
+                    className="ml-1 px-2 py-1 rounded bg-pink-100 text-pink-500 font-semibold hover:bg-pink-200 transition-all text-xs"
+                    title="이름 변경"
+                    onClick={() => setChangeTitle(true)}
+                  >변경</button>
+                </div>
+              )}
               <p className="text-xs text-gray-500">
                 {chatRoom.messages.length}개 메시지
               </p>

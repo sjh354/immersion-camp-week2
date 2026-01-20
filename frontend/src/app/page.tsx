@@ -357,7 +357,7 @@ const myComments = user
     }
   };
 
-  const handleShareToFeed = async (newPostData: { chatId: string, messageIds: string[] }) => {
+  const handleShareToFeed = async (newPostData: { chatId: string, messageIds: string[], isAnonymous: boolean }) => {
     try {
       const resp = await fetchWithAuth('/community', {
         method: 'POST',
@@ -367,6 +367,7 @@ const myComments = user
         body: JSON.stringify({
           chatId: newPostData.chatId,
           messageIds: newPostData.messageIds,
+          is_anonymous: newPostData.isAnonymous,
         }),
       });
 
@@ -602,7 +603,7 @@ const myComments = user
           onDeleteChat={handleDeleteChat}
           onUpdateTitle={handleUpdateTitle}
           onCreatePost={async (chatId, messageIds, isAnonymous) => {
-            await handleShareToFeed({ chatId, messageIds });
+            await handleShareToFeed({ chatId, messageIds, isAnonymous });
             setCurrentPage("community");
           }}
         />

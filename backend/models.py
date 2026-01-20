@@ -86,6 +86,7 @@ class Post(db.Model):
     msgs = Column(ARRAY(UUID(as_uuid=True))) # Array of Message IDs
     hearts = Column(Integer, default=0)
     created_at = Column(DateTime(timezone=True), default=get_current_time)
+    is_anonymous = Column(Boolean, default=False)
 
     user = relationship("User", back_populates="posts")
     comments = relationship("Comment", back_populates="post", cascade="all, delete-orphan")

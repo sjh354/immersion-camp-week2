@@ -518,12 +518,14 @@ def create_community_post():
     data = request.get_json() or {}
     chat_id = data.get('chatId')
     message_ids = data.get('messageIds', [])
+    is_anonymous = data.get('is_anonymous', False)
     
     # Create new post
     new_post = Post(
         user_id=g.user_id,
         msgs=message_ids, # ARRAY(UUID)
-        hearts=0
+        hearts=0,
+        is_anonymous=is_anonymous
     )
     db.session.add(new_post)
     
@@ -588,7 +590,7 @@ def get_community_posts():
                         "id": str(msg.id),
                         "sender": "user" if msg.role == "user" else "bot",
                         "content": msg.content,
-                        "timestamp": msg.created_at.isoformat() if msg.created_at else None
+                        "timestamp": msg.created_at.isoformat() if msg.created_at else None,
                     })
 
         # 현재 로그인한 사용자가 이 포스트에 좋아요를 눌렀는지 확인
@@ -601,7 +603,7 @@ def get_community_posts():
             "chatId": "", 
             "messageIds": [str(m_id) for m_id in p.msgs] if p.msgs else [],
             "messages": post_msgs,
-            "author": author.display_name if author else "Unknown",
+            "author": "익명의 사용자" if (p.is_anonymous or not author.display_name) else author.display_name,
             "authorEmail": author.email if author else "",
             "createdAt": p.created_at.isoformat() if p.created_at else None,
             "reactions": [

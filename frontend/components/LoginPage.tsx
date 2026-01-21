@@ -20,7 +20,7 @@ export function LoginPage({ onLogin }: LoginPageProps) {
   
   // Use environment variable for Client ID
   const GOOGLE_CLIENT_ID = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || "YOUR_GOOGLE_CLIENT_ID";
-
+  
   const handleGoogleSuccess = async (credentialResponse: any) => {
     try {
       setGoogleCredential(credentialResponse.credential);

@@ -10,8 +10,6 @@ import { MyPage } from "@/components/MyPage";
 import { MessageCircleHeart } from "lucide-react";
 import { fetchWithAuth, clearTokens, updateUser } from "@/utils/apiClient";
 import { ChatDetailPage } from "@/components/ChatDetailPage";
-import PushEnableButton from "@/components/PushEnableButton";
-
 
 export interface User {
   name: string;
@@ -84,15 +82,6 @@ export default function Home() {
   
   // 좋아요 서버 요청 중인 포스트 id 집합
   const [likingPostIds, setLikingPostIds] = useState<Set<string>>(new Set());
-  const [isPWA, setIsPWA] = useState(false);
-  
-    useEffect(() => {
-      // PWA 모드 감지
-      const isStandalone = window.matchMedia('(display-mode: standalone)').matches || 
-                          (window.navigator as any).standalone;
-      setIsPWA(isStandalone);
-    }, []);
-
 
   // 마이페이지 진입 시 서버에서 최신 유저 정보 동기화
   useEffect(() => {
@@ -579,7 +568,6 @@ const myComments = user
       onNavigate={navigate}
       onLogout={handleLogout}
     >
-      {isPWA ? <PushEnableButton /> : null}
       {currentPage === "chat-list" && (
         <Suspense fallback={
           <div className="max-w-4xl mx-auto pb-24">

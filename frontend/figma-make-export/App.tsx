@@ -5,6 +5,7 @@ import { ChatListPage } from './components/ChatListPage';
 import { ChatRoomPage } from './components/ChatRoomPage';
 import { CommunityPage } from './components/CommunityPage';
 import { MyPage } from './components/MyPage';
+import { fetchWithAuth } from '@/utils/apiClient';
 
 interface User {
   name: string;

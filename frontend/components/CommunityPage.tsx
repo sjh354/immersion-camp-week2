@@ -282,7 +282,7 @@ export function CommunityPage({ posts, currentUser, onReactToPost, onAddComment,
                       <input
                         type="text"
                         value={commentInputs[post.id] || ''}
-                        onChange={(e) => setCommentInputs(prev => ({ ...prev, [postId]: e.target.value }))}
+                        onChange={(e) => setCommentInputs(prev => ({ ...prev, [post.id]: e.target.value }))}
                         onKeyPress={(e) => {
                           if (e.key === 'Enter') {
                             handleCommentSubmit(post.id);

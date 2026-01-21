@@ -185,6 +185,86 @@ docker exec -i <postgres_container> psql -U postgres -d eokppa < schema.sql
 
 ---
 
+## ERD (Mermaid)
+
+```mermaid
+erDiagram
+  USER ||--o{ CONVERSATION : has
+  CONVERSATION ||--o{ MESSAGE : has
+  USER ||--o{ POST : writes
+  POST ||--o{ COMMENT : has
+  USER ||--o{ COMMENT : writes
+  USER ||--o{ LIKE : likes
+  POST ||--o{ LIKE : has
+
+  USER {
+    uuid id
+    string email
+    string password_hash
+    string display_name
+    datetime created_at
+    datetime updated_at
+    datetime last_login_at
+    string google_sub
+    string setting_mbtI
+    int setting_intensity
+    string style
+    int post_count
+    int comment_count
+  }
+
+  CONVERSATION {
+    uuid id
+    uuid user_id
+    string title
+    datetime created_at
+    datetime updated_at
+    boolean deleted
+  }
+
+  MESSAGE {
+    uuid id
+    uuid conversation_id
+    uuid user_id
+    string role
+    string content
+    datetime created_at
+    int content_len
+    string language
+    string model_name
+    float temperature
+    string embedding
+  }
+
+  POST {
+    uuid id
+    uuid user_id
+    string message_ids
+    int hearts
+    datetime created_at
+    datetime updated_at
+    boolean is_anonymous
+  }
+
+  LIKE {
+    uuid id
+    uuid user_id
+    uuid post_id
+    datetime created_at
+  }
+
+  COMMENT {
+    uuid id
+    uuid user_id
+    uuid post_id
+    boolean is_anonymous
+    string content
+    datetime created_at
+    datetime updated_at
+  }
+```
+---
+
 ## 배포 (Deployment)
 
 - Docker Compose 기반 배포

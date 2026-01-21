@@ -64,7 +64,7 @@ export const fetchWithAuth = async (endpoint: string, options: FetchOptions = {}
   }
 
   try {
-    const response = await fetch(url, { ...options, headers });
+    const response = await fetch(url, { ...options, headers, cache: 'no-store' });
 
     // 401 Unauthorized handling
     if (response.status === 401) {

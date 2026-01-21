@@ -23,6 +23,7 @@ html, body {
   height: 100%;
   margin: 0;
   background: #fff; /* 앱 배경색과 동일 */
+  overscroll-behavior-y: contain;
 }
 
 body {
@@ -39,4 +40,10 @@ body {
 /* Next App Router 루트 */
 main {
   min-height: 100dvh; /* 100vh 대신 100dvh 권장 */
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
 }

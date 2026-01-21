@@ -152,47 +152,47 @@ const myComments = user
     }
   }, []); // Run once on mount
 
-  useEffect(() => {
-    const fetchData = async () => {
-      if (!user) return;
+  const fetchData = async () => {
+    if (!user) return;
 
-      try {
-        const [chatRes, postRes] = await Promise.all([
-          fetchWithAuth('/chat'),
-          fetchWithAuth('/community')
-        ]);
+    try {
+      const [chatRes, postRes] = await Promise.all([
+        fetchWithAuth('/chat'),
+        fetchWithAuth('/community')
+      ]);
 
-        if (chatRes.ok) {
-          const chats = await chatRes.json();
-          setChatRooms(chats);
-        }
-
-        if (postRes.ok) {
-          const fetchedPosts: Post[] = await postRes.json();
-          
-          // Fetch comments for each post
-          const postsWithComments = await Promise.all(
-            fetchedPosts.map(async (post) => {
-              try {
-                const commentRes = await fetchWithAuth(`/community/comment?post_id=${post.id}`);
-                if (commentRes.ok) {
-                  const comments = await commentRes.json();
-                  // likedByMe 필드가 누락되지 않도록 명시적으로 복사
-                  return { ...post, comments, likedByMe: post.likedByMe };
-                }
-              } catch (err) {
-                console.error(`Failed to fetch comments for post ${post.id}:`, err);
-              }
-              return post;
-            })
-          );
-          setPosts(postsWithComments);
-        }
-      } catch (err) {
-        console.error("Failed to fetch initial data:", err);
+      if (chatRes.ok) {
+        const chats = await chatRes.json();
+        setChatRooms(chats);
       }
-    };
 
+      if (postRes.ok) {
+        const fetchedPosts: Post[] = await postRes.json();
+        // Fetch comments for each post
+        const postsWithComments = await Promise.all(
+          fetchedPosts.map(async (post) => {
+            try {
+              post.messages.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+              const commentRes = await fetchWithAuth(`/community/comment?post_id=${post.id}`);
+              if (commentRes.ok) {
+                const comments = await commentRes.json();
+                // likedByMe 필드가 누락되지 않도록 명시적으로 복사
+                return { ...post, comments, likedByMe: post.likedByMe };
+              }
+            } catch (err) {
+              console.error(`Failed to fetch comments for post ${post.id}:`, err);
+            }
+            return post;
+          })
+        );
+        setPosts(postsWithComments);
+      }
+    } catch (err) {
+      console.error("Failed to fetch initial data:", err);
+    }
+  };
+
+  useEffect(() => {
     fetchData();
   }, [user]);
 
@@ -235,13 +235,12 @@ const myComments = user
   const handleLogin = (userData: User) => {
     // 닉네임, 나이, 성별이 있으면 User 객체에 반영
     setUser(prev => {
-      // userData에 age, gender, name이 있으면 우선 반영
       return {
         ...prev,
         ...userData,
         name: userData.name ?? prev?.name ?? '',
-        age: userData.age ?? prev?.age ?? '',
-        gender: userData.gender ?? prev?.gender ?? '',
+        age: typeof userData.age === 'string' ? Number(userData.age) : userData.age ?? prev?.age,
+        gender: (userData.gender === undefined ? prev?.gender : userData.gender),
       };
     });
   };
@@ -396,13 +395,12 @@ const myComments = user
 
     // 2. optimistic UI update (likedByMe, reactions.count, reactions.users 모두 즉시 반영)
     setPosts((prev) => {
-      return prev.map((p) => {
+      const updated = prev.map((p) => {
         if (p.id !== postId) return p;
         let newLikedByMe = p.likedByMe;
         const reactions = p.reactions.map((r) => {
           if (r.type === reactionType) {
             const hasReacted = r.users.includes(user.email);
-            // 실제 토글될 때만 count 증감
             if (reactionType === "empathy") {
               newLikedByMe = !hasReacted;
             }
@@ -422,6 +420,7 @@ const myComments = user
           reactions,
         };
       });
+      return updated;
     });
 
     // 3. 서버에 동기화 (POST: 추가, DELETE: 취소)
@@ -433,7 +432,13 @@ const myComments = user
         const resp = await fetchWithAuth(`/community/${postId}`);
         if (resp.ok) {
           const updatedPost = await resp.json();
-          setPosts((prev) => prev.map((p) => p.id === postId ? { ...p, ...updatedPost } : p));
+          setPosts((prev) =>
+            prev.map((p) =>
+              p.id === postId
+                ? { ...p, ...updatedPost }
+                : p
+            )
+          );
         }
       } catch (err) {
         console.error("좋아요 동기화 실패:", err);
@@ -603,7 +608,7 @@ const myComments = user
           onDeleteChat={handleDeleteChat}
           onUpdateTitle={handleUpdateTitle}
           onCreatePost={async (chatId, messageIds, isAnonymous) => {
-            await handleShareToFeed({ chatId, messageIds, isAnonymous });
+            await handleShareToFeed({ chatId, messageIds, isAnonymous: !!isAnonymous });
             setCurrentPage("community");
           }}
         />
@@ -617,16 +622,19 @@ const myComments = user
           onDeletePost={handleDeletePost}
           onDeleteComment={handleDeleteComment}
           likingPostIds={likingPostIds}
+          onReloadCommunity={fetchData}
         />
       )}
       {currentPage === "mypage" && (
         <MyPage
           currentUser={user}
           setCurrentUser={setUser}
+          posts={posts}
           onNavigate={navigate}
           onDeleteComment={handleDeleteComment}
           onDeletePost={handleDeletePost}
           onLogout={handleLogout}
+          onReactToPost={handleReaction}
         />
       )}
     </Layout>

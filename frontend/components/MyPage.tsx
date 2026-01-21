@@ -40,13 +40,15 @@ interface Comment {
 interface MyPageProps {
   currentUser: User | null;
   setCurrentUser?: (user: User) => void;
+  posts: Post[];
   onNavigate: (page: string) => void;
   onDeleteComment: (postId: string, commentId: string) => void;
   onDeletePost: (postId: string) => void;
   onLogout: () => void;
+  onReactToPost: (postId: string, reactionType: 'empathy' | 'sad' | 'laugh' | 'love') => void;
 }
 
-export function MyPage({ currentUser, setCurrentUser, onNavigate, onDeleteComment, onDeletePost, onLogout }: MyPageProps) {
+export function MyPage({ currentUser, setCurrentUser, posts, onNavigate, onDeleteComment, onDeletePost, onLogout, onReactToPost }: MyPageProps) {
   // 닉네임, 나이, 성별 상태 추가
   const [nickname, setNickname] = useState(currentUser?.name || '');
   const [age, setAge] = useState<number | ''>(currentUser?.age ?? '');
@@ -67,25 +69,20 @@ export function MyPage({ currentUser, setCurrentUser, onNavigate, onDeleteCommen
   
   const [myPosts, setMyPosts] = useState<Post[]>([]);
   const [myComments, setMyComments] = useState<Comment[]>([]);
-  const [likedPosts, setLikedPosts] = useState<Post[]>([]);
-  const [likeCount, setLikeCount] = useState<number>(0);
+  // posts 상태에서 파생된 값으로 좋아요 리스트/카운트 계산
+  const likedPosts = posts.filter((p: Post) => p.likedByMe);
+  const likeCount = likedPosts.length;
 
   useEffect(() => {
     if (currentUser) {
       const fetchMyActivity = async () => {
         try {
-          const [postsResp, commentsResp, likesResp] = await Promise.all([
+          const [postsResp, commentsResp] = await Promise.all([
             fetchWithAuth('/my/posts'),
-            fetchWithAuth('/my/comments'),
-            fetchWithAuth('/my/likes')
+            fetchWithAuth('/my/comments')
           ]);
           if (postsResp.ok) setMyPosts(await postsResp.json());
           if (commentsResp.ok) setMyComments(await commentsResp.json());
-          if (likesResp.ok) {
-            const likesData = await likesResp.json();
-            setLikedPosts(likesData.posts || []);
-            setLikeCount(likesData.count || 0);
-          }
         } catch (err) {
           console.error("Error fetching my activity:", err);
         }
@@ -438,25 +435,13 @@ export function MyPage({ currentUser, setCurrentUser, onNavigate, onDeleteCommen
             <div className="space-y-4 mt-6">
               {likedPosts.map((post) => (
                 <div key={post.id} className="bg-white rounded-2xl shadow-lg p-6 hover:shadow-xl transition-shadow">
-                  <div className="flex items-center justify-between mb-4">
-                    <div className="flex items-center gap-3">
-                      <div className="bg-gradient-to-r from-pink-500 to-purple-500 w-10 h-10 rounded-full flex items-center justify-center text-white font-bold">
-                        {post.author[0]}
-                      </div>
-                      <div>
-                        <p className="font-semibold text-gray-800">{post.author}</p>
-                        <p className="text-xs text-gray-500">{formatDate(post.createdAt)}</p>
-                      </div>
+                  <div className="flex items-center gap-3 mb-4">
+                    <div className="bg-gradient-to-r from-pink-500 to-purple-500 w-10 h-10 rounded-full flex items-center justify-center text-white font-bold">
+                      {post.author[0]}
                     </div>
-                    {/* 좋아요 이모티콘 및 숫자 */}
-                    <div className="flex items-center gap-2">
-                      <span
-                        className={`text-2xl ${post.likedByMe ? 'text-pink-500' : 'text-gray-300'}`}
-                        title={post.likedByMe ? '내가 누른 좋아요' : '좋아요'}
-                      >
-                        ❤️
-                      </span>
-                      <span className="text-lg font-bold text-pink-600">{post.reactions?.[0]?.count ?? 0}</span>
+                    <div>
+                      <p className="font-semibold text-gray-800">{post.author}</p>
+                      <p className="text-xs text-gray-500">{formatDate(post.createdAt)}</p>
                     </div>
                   </div>
                   <div className="space-y-2 mb-3">
@@ -469,6 +454,22 @@ export function MyPage({ currentUser, setCurrentUser, onNavigate, onDeleteCommen
                     {post.messages.length > 2 && (
                       <p className="text-xs text-gray-500 text-center">+{post.messages.length - 2}개 메시지 더보기</p>
                     )}
+                  </div>
+                  {/* 좋아요 취소 버튼 - 하단 좌측 정렬 */}
+                  <div className="flex justify-start mt-2">
+                    <button
+                      onClick={async () => {
+                        if (confirm('이 좋아요를 삭제하시겠어요?')) {
+                          // 내 포스트/댓글 삭제와 동일하게 optimistic update + 직접 상태 갱신
+                          if (onReactToPost) {
+                            onReactToPost(post.id, 'empathy');
+                          }
+                        }
+                      }}
+                      className="text-gray-400 hover:text-pink-600 transition-colors text-sm"
+                    >
+                      삭제
+                    </button>
                   </div>
                 </div>
               ))}

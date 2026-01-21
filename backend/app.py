@@ -575,6 +575,39 @@ def get_community_posts():
     # 최신순(생성일 내림차순)으로 정렬
     posts = Post.query.order_by(Post.created_at.desc()).all()
 
+    import random
+    import math
+    from datetime import datetime, timezone
+
+    def score_post(post, now=None):
+        if now is None:
+            now = datetime.now(timezone.utc)
+
+        age_hours = (now - post.created_at).total_seconds() / 3600
+        time_score = math.exp(-age_hours / 24)  # 하루 기준 감쇠
+        heart_score = math.log1p(post.hearts)  # log(hearts + 1)
+        random_score = random.random()
+
+        # 가중치
+        W_TIME = 0.6
+        W_HEART = 0.35
+        W_RANDOM = 0.7
+
+        return (
+            W_TIME * time_score +
+            W_HEART * heart_score +
+            W_RANDOM * random_score
+        )
+
+    def sort_posts(posts):
+        now = datetime.now(timezone.utc)
+        return sorted(
+            posts,
+            key=lambda post: score_post(post, now),
+            reverse=True
+        )
+    posts = sort_posts(posts)
+
     results = []
     from models import Like
     for p in posts:
@@ -615,6 +648,46 @@ def get_community_posts():
 
     # 최신순 정렬된 결과를 그대로 반환 (최신글이 배열 첫 번째에 오도록)
     return jsonify(results)
+
+@app.route('/community/<post_id>', methods=['GET'])
+@require_auth
+def get_community_post(post_id):
+    from models import Post, User, Message, Like
+    post = Post.query.get(post_id)
+    if not post:
+        return jsonify({"error": "Post not found"}), 404
+    author = User.query.get(post.user_id)
+    # Fetch messages in the post
+    post_msgs = []
+    if post.msgs:
+        for m_id in post.msgs:
+            msg = Message.query.get(m_id)
+            if msg:
+                post_msgs.append({
+                    "id": str(msg.id),
+                    "sender": "user" if msg.role == "user" else "bot",
+                    "content": msg.content,
+                    "timestamp": msg.created_at.isoformat() if msg.created_at else None,
+                })
+    # 현재 로그인한 사용자가 이 포스트에 좋아요를 눌렀는지 확인
+    liked_by_me = False
+    if hasattr(g, 'user_id') and g.user_id:
+        liked_by_me = Like.query.filter_by(user_id=g.user_id, post_id=post.id).first() is not None
+    result = {
+        "id": str(post.id),
+        "chatId": "",
+        "messageIds": [str(m_id) for m_id in post.msgs] if post.msgs else [],
+        "messages": post_msgs,
+        "author": "익명의 사용자" if (post.is_anonymous or not author.display_name) else author.display_name,
+        "authorEmail": author.email if author else "",
+        "createdAt": post.created_at.isoformat() if post.created_at else None,
+        "reactions": [
+            {"type": "empathy", "count": post.hearts, "users": []}
+        ],
+        "likedByMe": liked_by_me,
+        "comments": [] # Comments are now fetched via /community/comment
+    }
+    return jsonify(result)
 
 @app.route('/community/<post_id>', methods=['DELETE'])
 @require_auth
@@ -748,6 +821,8 @@ def manage_user_profile():
         return jsonify({"error": "User not found"}), 404
     
     if request.method == 'GET':
+        from models import Like
+        like_cnt = Like.query.filter_by(user_id=user.id).count()
         return jsonify({
             "user": {
                 "id": str(user.id),
@@ -760,7 +835,7 @@ def manage_user_profile():
                 "style": user.style,
                 "postCnt": user.post_cnt,
                 "commentCnt": user.comment_cnt,
-                "likeCnt": user.like_cnt
+                "likeCnt": like_cnt
             }
         })
     

@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { Heart, MessageCircle, Laugh, Frown, Send } from 'lucide-react';
 import { User } from '@/src/app/page';
+import PullToRefreshPage from '@/utils/PullToRefreshPage';
 
 interface Message {
   id: string;
@@ -47,6 +48,7 @@ interface CommunityPageProps {
   onAddComment: (postId: string, content: string, isAnonymous?: boolean) => void;
   onDeletePost: (postId: string) => void;
   onDeleteComment: (postId: string, commentId: string) => void;
+  onReloadCommunity: () => Promise<void>;
   likingPostIds?: Set<string>;
 }
 
@@ -57,7 +59,7 @@ const reactionIcons = {
   love: { icon: '💕', label: '좋아요', color: 'pink' },
 };
 
-export function CommunityPage({ posts, currentUser, onReactToPost, onAddComment, onDeletePost, onDeleteComment, likingPostIds }: CommunityPageProps) {
+export function CommunityPage({ posts, currentUser, onReactToPost, onAddComment, onDeletePost, onDeleteComment, onReloadCommunity, likingPostIds }: CommunityPageProps) {
   const [commentInputs, setCommentInputs] = useState<{ [postId: string]: string }>({});
   // 모든 댓글을 기본적으로 숨김 상태로 초기화
   const initialExpandedState = posts.reduce((acc, post) => {
@@ -99,6 +101,7 @@ export function CommunityPage({ posts, currentUser, onReactToPost, onAddComment,
   return (
     <div className="max-w-4xl mx-auto pb-24">
       {/* Header */}
+      <PullToRefreshPage triggerFunction={onReloadCommunity} />
       <div className="text-center mb-8">
         <h2 className="text-3xl font-bold bg-gradient-to-r from-pink-600 to-purple-600 bg-clip-text text-transparent mb-3">
           커뮤니티
@@ -137,7 +140,7 @@ export function CommunityPage({ posts, currentUser, onReactToPost, onAddComment,
                       <p className="text-xs text-gray-500">{formatDate(post.createdAt)}</p>
                     </div>
                   </div>
-                  {currentUser && post.originalAuthorEmail === currentUser.email && (
+                  {currentUser && (post.originalAuthorEmail === currentUser.email || post.authorEmail === currentUser.email) && (
                     <button
                       onClick={() => {
                         if (confirm('이 포스트를 삭제하시겠어요?')) {
@@ -239,7 +242,7 @@ export function CommunityPage({ posts, currentUser, onReactToPost, onAddComment,
                               {new Date(comment.timestamp).toLocaleDateString('ko-KR')}
                             </span>
                           </div>
-                          {currentUser && comment.originalAuthorEmail === currentUser.email && (
+                          {(currentUser && (comment.originalAuthorEmail === currentUser.email || comment.authorEmail === currentUser.email)) && (
                             <button
                               onClick={() => {
                                 if (confirm('이 댓글을 삭제하시겠어요?')) {
@@ -279,7 +282,7 @@ export function CommunityPage({ posts, currentUser, onReactToPost, onAddComment,
                       <input
                         type="text"
                         value={commentInputs[post.id] || ''}
-                        onChange={(e) => setCommentInputs(prev => ({ ...prev, [post.id]: e.target.value }))}
+                        onChange={(e) => setCommentInputs(prev => ({ ...prev, [postId]: e.target.value }))}
                         onKeyPress={(e) => {
                           if (e.key === 'Enter') {
                             handleCommentSubmit(post.id);
